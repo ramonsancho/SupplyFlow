@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit, updateDoc, doc, where } from 'firebase/firestore';
 
@@ -50,6 +51,14 @@ export function useNotifications() {
   }, [auth.currentUser]);
 
   const addNotification = useCallback(async (title: string, message: string, type: Notification['type'] = 'info') => {
+    // Immediate feedback via sonner
+    switch (type) {
+      case 'success': toast.success(title, { description: message }); break;
+      case 'error': toast.error(title, { description: message }); break;
+      case 'warning': toast.warning(title, { description: message }); break;
+      default: toast.info(title, { description: message });
+    }
+
     if (!auth.currentUser) return;
     
     try {
@@ -62,7 +71,11 @@ export function useNotifications() {
         read: false,
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'notifications');
+      try {
+        handleFirestoreError(error, OperationType.CREATE, 'notifications');
+      } catch (e) {
+        console.error('Failed to add notification:', e);
+      }
     }
   }, []);
 
@@ -73,7 +86,11 @@ export function useNotifications() {
         updatedAt: serverTimestamp()
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `notifications/${id}`);
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `notifications/${id}`);
+      } catch (e) {
+        console.error('Failed to mark notification as read:', e);
+      }
     }
   }, []);
 

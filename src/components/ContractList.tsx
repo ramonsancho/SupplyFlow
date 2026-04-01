@@ -17,12 +17,14 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Contract } from '../types';
 import ContractModal from './ContractModal';
+import ConfirmModal from './ConfirmModal';
 
 export default function ContractList() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [contractToDelete, setContractToDelete] = useState<{id: string, supplierName: string} | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -64,16 +66,23 @@ export default function ContractList() {
       setIsModalOpen(false);
       setEditingContract(null);
     } catch (error) {
-      handleFirestoreError(error, editingContract ? OperationType.UPDATE : OperationType.CREATE, 'contracts');
+      try {
+        handleFirestoreError(error, editingContract ? OperationType.UPDATE : OperationType.CREATE, 'contracts');
+      } catch (e) {
+        console.error('Contract save error:', e);
+      }
     }
   };
 
   const handleDeleteContract = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este contrato?')) return;
     try {
       await deleteDoc(doc(db, 'contracts', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'contracts');
+      try {
+        handleFirestoreError(error, OperationType.DELETE, 'contracts');
+      } catch (e) {
+        console.error('Contract delete error:', e);
+      }
     }
   };
 
@@ -198,7 +207,7 @@ export default function ContractList() {
                         <Edit2 size={16} />
                       </button>
                       <button 
-                        onClick={() => handleDeleteContract(contract.id)}
+                        onClick={() => setContractToDelete({ id: contract.id, supplierName: contract.supplierName })}
                         className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-white rounded-lg transition-all"
                       >
                         <Trash2 size={16} />
@@ -227,6 +236,16 @@ export default function ContractList() {
         }}
         onSubmit={handleAddContract}
         initialData={editingContract || undefined}
+      />
+
+      <ConfirmModal
+        isOpen={!!contractToDelete}
+        onClose={() => setContractToDelete(null)}
+        onConfirm={() => contractToDelete && handleDeleteContract(contractToDelete.id)}
+        title="Excluir Contrato"
+        message={`Tem certeza que deseja excluir o contrato do fornecedor ${contractToDelete?.supplierName}? Esta ação não poderá ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
       />
     </div>
   );

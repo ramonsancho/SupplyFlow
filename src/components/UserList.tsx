@@ -12,6 +12,7 @@ import {
   Mail
 } from 'lucide-react';
 import UserModal from './UserModal';
+import ConfirmModal from './ConfirmModal';
 import { User } from '../types';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
@@ -35,6 +36,8 @@ export default function UserList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [editingUser, setEditingUser] = useState<User | undefined>();
+  const [userToDelete, setUserToDelete] = useState<{id: string, name: string} | null>(null);
+  const [resetPasswordEmail, setResetPasswordEmail] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
@@ -43,9 +46,13 @@ export default function UserList() {
   useEffect(() => {
     if (auth.currentUser) {
       const fetchProfile = async () => {
-        const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-        if (userDoc.exists()) {
-          setCurrentUserProfile({ ...userDoc.data(), id: userDoc.id } as User);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
+          if (userDoc.exists()) {
+            setCurrentUserProfile({ ...userDoc.data(), id: userDoc.id } as User);
+          }
+        } catch (error) {
+          console.error('Failed to fetch profile:', error);
         }
       };
       fetchProfile();
@@ -92,31 +99,35 @@ export default function UserList() {
       setIsModalOpen(false);
       setEditingUser(undefined);
     } catch (error) {
-      handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
+      try {
+        handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
+      } catch (e) {
+        console.error('User save error:', e);
+      }
     }
   };
 
   const handleDeleteUser = async (id: string, name: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o usuário ${name}?`)) {
+    try {
+      await deleteDoc(doc(db, 'users', id));
+      addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
+      addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
+    } catch (error) {
       try {
-        await deleteDoc(doc(db, 'users', id));
-        addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
-        addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
-      } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      } catch (e) {
+        console.error('User delete error:', e);
       }
     }
   };
 
   const handleResetPassword = async (email: string) => {
-    if (window.confirm(`Deseja enviar um email de redefinição de senha para ${email}?`)) {
-      try {
-        await sendPasswordResetEmail(auth, email);
-        addLog('Resetou Senha', 'User', email, auth.currentUser?.email || 'Unknown');
-        addNotification('Email Enviado', `Instruções de redefinição enviadas para ${email}.`, 'success');
-      } catch (error) {
-        addNotification('Erro', 'Não foi possível enviar o email de redefinição.', 'error');
-      }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      addLog('Resetou Senha', 'User', email, auth.currentUser?.email || 'Unknown');
+      addNotification('Email Enviado', `Instruções de redefinição enviadas para ${email}.`, 'success');
+    } catch (error) {
+      addNotification('Erro', 'Não foi possível enviar o email de redefinição.', 'error');
     }
   };
 
@@ -149,6 +160,26 @@ export default function UserList() {
         }} 
         onSubmit={handleSaveUser}
         initialData={editingUser}
+      />
+
+      <ConfirmModal
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={() => userToDelete && handleDeleteUser(userToDelete.id, userToDelete.name)}
+        title="Excluir Usuário"
+        message={`Tem certeza que deseja excluir o usuário ${userToDelete?.name}? Esta ação não poderá ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={!!resetPasswordEmail}
+        onClose={() => setResetPasswordEmail(null)}
+        onConfirm={() => resetPasswordEmail && handleResetPassword(resetPasswordEmail)}
+        title="Resetar Senha"
+        message={`Deseja enviar um email de redefinição de senha para ${resetPasswordEmail}?`}
+        confirmText="Enviar Email"
+        variant="info"
       />
 
       <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
@@ -224,7 +255,7 @@ export default function UserList() {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button 
-                        onClick={() => handleResetPassword(user.email)}
+                        onClick={() => setResetPasswordEmail(user.email)}
                         className="p-2 text-[#8E9299] hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
                         title="Resetar Senha"
                       >
@@ -241,7 +272,7 @@ export default function UserList() {
                         <Edit size={18} />
                       </button>
                       <button 
-                        onClick={() => handleDeleteUser(user.id, user.name)}
+                        onClick={() => setUserToDelete({ id: user.id, name: user.name })}
                         className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
                         title="Excluir"
                       >

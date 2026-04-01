@@ -14,6 +14,7 @@ import {
   Trash2
 } from 'lucide-react';
 import RFQModal from './RFQModal';
+import ConfirmModal from './ConfirmModal';
 import { RFQ } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -38,6 +39,7 @@ function cn(...inputs: ClassValue[]) {
 
 export default function RFQList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [rfqToDelete, setRfqToDelete] = useState<{id: string, number: number} | null>(null);
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
@@ -76,18 +78,24 @@ export default function RFQList() {
       addLog('Criou RFQ', 'RFQ', docRef.id, auth.currentUser?.email || 'Unknown');
       addNotification('RFQ Criada', `A cotação #${rfqs.length + 1001} foi gerada com sucesso.`, 'success');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'rfqs');
+      try {
+        handleFirestoreError(error, OperationType.CREATE, 'rfqs');
+      } catch (e) {
+        console.error('RFQ add error:', e);
+      }
     }
   };
 
   const handleDeleteRFQ = async (id: string, number: number) => {
-    if (window.confirm(`Tem certeza que deseja excluir a cotação #${number}?`)) {
+    try {
+      await deleteDoc(doc(db, 'rfqs', id));
+      addLog('Excluiu RFQ', 'RFQ', id, auth.currentUser?.email || 'Unknown');
+      addNotification('RFQ Excluída', `A cotação #${number} foi removida.`, 'warning');
+    } catch (error) {
       try {
-        await deleteDoc(doc(db, 'rfqs', id));
-        addLog('Excluiu RFQ', 'RFQ', id, auth.currentUser?.email || 'Unknown');
-        addNotification('RFQ Excluída', `A cotação #${number} foi removida.`, 'warning');
-      } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `rfqs/${id}`);
+      } catch (e) {
+        console.error('RFQ delete error:', e);
       }
     }
   };
@@ -140,6 +148,16 @@ export default function RFQList() {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         onSubmit={handleAddRFQ}
+      />
+
+      <ConfirmModal
+        isOpen={!!rfqToDelete}
+        onClose={() => setRfqToDelete(null)}
+        onConfirm={() => rfqToDelete && handleDeleteRFQ(rfqToDelete.id, rfqToDelete.number)}
+        title="Excluir Cotação"
+        message={`Tem certeza que deseja excluir a cotação #${rfqToDelete?.number}? Esta ação não poderá ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
       />
 
       {/* Filters */}
@@ -224,7 +242,7 @@ export default function RFQList() {
                         <FileText size={18} />
                       </button>
                       <button 
-                        onClick={() => handleDeleteRFQ(rfq.id, rfq.number)}
+                        onClick={() => setRfqToDelete({ id: rfq.id, number: rfq.number })}
                         className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
                         title="Excluir"
                       >

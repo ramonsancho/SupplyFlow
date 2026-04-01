@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import SupplierModal from './SupplierModal';
+import ConfirmModal from './ConfirmModal';
 import { Supplier } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -44,6 +45,7 @@ export default function SupplierList() {
   const [families, setFamilies] = useState<string[]>(['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística']);
   const [selectedFamily, setSelectedFamily] = useState('Todas as Famílias');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | undefined>();
+  const [supplierToDelete, setSupplierToDelete] = useState<{id: string, name: string} | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
@@ -109,18 +111,24 @@ export default function SupplierList() {
       setIsModalOpen(false);
       setEditingSupplier(undefined);
     } catch (error) {
-      handleFirestoreError(error, editingSupplier ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
+      try {
+        handleFirestoreError(error, editingSupplier ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
+      } catch (e) {
+        console.error('Supplier save error:', e);
+      }
     }
   };
 
   const handleDeleteSupplier = async (id: string, name: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o fornecedor ${name}?`)) {
+    try {
+      await deleteDoc(doc(db, 'suppliers', id));
+      addLog('Excluiu Fornecedor', 'Supplier', id, auth.currentUser?.email || 'Unknown');
+      addNotification('Fornecedor Excluído', `${name} foi removido do sistema.`, 'warning');
+    } catch (error) {
       try {
-        await deleteDoc(doc(db, 'suppliers', id));
-        addLog('Excluiu Fornecedor', 'Supplier', id, auth.currentUser?.email || 'Unknown');
-        addNotification('Fornecedor Excluído', `${name} foi removido do sistema.`, 'warning');
-      } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `suppliers/${id}`);
+      } catch (e) {
+        console.error('Supplier delete error:', e);
       }
     }
   };
@@ -156,6 +164,16 @@ export default function SupplierList() {
         }} 
         onSubmit={handleSaveSupplier}
         initialData={editingSupplier}
+      />
+
+      <ConfirmModal
+        isOpen={!!supplierToDelete}
+        onClose={() => setSupplierToDelete(null)}
+        onConfirm={() => supplierToDelete && handleDeleteSupplier(supplierToDelete.id, supplierToDelete.name)}
+        title="Excluir Fornecedor"
+        message={`Tem certeza que deseja excluir o fornecedor ${supplierToDelete?.name}? Esta ação não poderá ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
       />
 
       {/* Filters */}
@@ -258,7 +276,7 @@ export default function SupplierList() {
                     <Edit size={18} />
                   </button>
                   <button 
-                    onClick={() => handleDeleteSupplier(supplier.id, supplier.name)}
+                    onClick={() => setSupplierToDelete({ id: supplier.id, name: supplier.name })}
                     className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
                     title="Excluir"
                   >

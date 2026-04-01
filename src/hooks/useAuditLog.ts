@@ -35,7 +35,11 @@ export function useAuditLog() {
         timestamp: serverTimestamp(),
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'audit-logs');
+      try {
+        handleFirestoreError(error, OperationType.CREATE, 'audit-logs');
+      } catch (e) {
+        console.error('Failed to add audit log:', e);
+      }
     }
   }, []);
 

@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { Toaster } from 'sonner';
 import { auth, db } from './firebase';
 import { collection, query, getDocs, setDoc, doc, serverTimestamp, getDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import Layout from './components/Layout';
@@ -29,9 +30,17 @@ export default function App() {
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
           // Criar o primeiro administrador se a coleção estiver vazia
-          await setDoc(doc(db, 'users', 'initial-admin'), {
+          await setDoc(doc(db, 'users', 'initial-admin-1'), {
             name: 'Ramon Souza',
             email: 'ramon.souza@oeg.group',
+            role: 'Administrador',
+            status: 'Ativo',
+            approvalLimit: 10000000,
+            createdAt: serverTimestamp()
+          });
+          await setDoc(doc(db, 'users', 'initial-admin-2'), {
+            name: 'Ramon Sancho',
+            email: 'ramonsancho@gmail.com',
             role: 'Administrador',
             status: 'Ativo',
             approvalLimit: 10000000,
@@ -135,30 +144,36 @@ export default function App() {
 
   if (!user) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <>
+        <Toaster position="top-right" richColors />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </>
     );
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="suppliers" element={<SupplierList />} />
-          <Route path="rfqs" element={<RFQList />} />
-          <Route path="purchase-orders" element={<OCList />} />
-          <Route path="contracts" element={<ContractList />} />
-          <Route path="users" element={<UserList />} />
-          <Route path="audit-logs" element={<AuditLogList />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <>
+      <Toaster position="top-right" richColors />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="suppliers" element={<SupplierList />} />
+            <Route path="rfqs" element={<RFQList />} />
+            <Route path="purchase-orders" element={<OCList />} />
+            <Route path="contracts" element={<ContractList />} />
+            <Route path="users" element={<UserList />} />
+            <Route path="audit-logs" element={<AuditLogList />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </>
   );
 }
 

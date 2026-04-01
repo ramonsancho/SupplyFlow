@@ -93,49 +93,84 @@ export default function Login() {
 
   const handleFirstAccess = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('handleFirstAccess started for:', email);
+    
     if (password !== confirmPassword) {
       addNotification('Erro', 'As senhas não coincidem.', 'error');
       return;
     }
 
+    if (password.length < 6) {
+      addNotification('Erro', 'A senha deve ter pelo menos 6 caracteres.', 'error');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // 1. Criar o usuário no Firebase Auth primeiro
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
-
-      // 2. Agora que está autenticado, verificar se o email está cadastrado na coleção 'users'
-      const q = query(collection(db, 'users'), where('email', '==', email));
+      // 1. Verificar se o email está cadastrado na coleção 'users'
+      // Fazemos isso ANTES de criar no Auth para evitar criar usuários órfãos
+      const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
       const querySnapshot = await getDocs(q);
 
-      if (querySnapshot.empty) {
-        // Se não estiver autorizado, deletar o usuário do Auth e mostrar erro
-        await userCredential.user.delete();
+      // Bootstrap emails
+      const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
+      const isBootstrap = bootstrapEmails.includes(email.toLowerCase().trim());
+
+      if (querySnapshot.empty && !isBootstrap) {
         addNotification('Acesso Negado', 'Este email não está autorizado no sistema. Entre em contato com o administrador.', 'error');
         setIsLoading(false);
         return;
       }
 
-      // 3. Vincular o UID ao documento do Firestore
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
-      
-      await setDoc(doc(db, 'users', uid), {
-        ...userData,
-        uid: uid,
-        updatedAt: new Date().toISOString()
-      });
+      // 2. Criar o usuário no Firebase Auth
+      console.log('Creating user in Firebase Auth...');
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+      console.log('User created in Auth with UID:', uid);
 
-      // Deletar o documento antigo (que tinha ID aleatório)
-      if (userDoc.id !== uid) {
-        await deleteDoc(doc(db, 'users', userDoc.id));
+      // 3. Vincular o UID ao documento do Firestore
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        const userData = userDoc.data();
+        
+        console.log('Updating existing user document:', userDoc.id);
+        await setDoc(doc(db, 'users', uid), {
+          ...userData,
+          uid: uid,
+          updatedAt: new Date().toISOString()
+        });
+
+        // Deletar o documento antigo (que tinha ID aleatório ou temporário)
+        if (userDoc.id !== uid) {
+          await deleteDoc(doc(db, 'users', userDoc.id));
+        }
+      } else {
+        // Criar novo documento para o bootstrap
+        console.log('Creating new bootstrap admin document');
+        await setDoc(doc(db, 'users', uid), {
+          name: email.split('@')[0],
+          email: email.toLowerCase().trim(),
+          role: 'Administrador',
+          status: 'Ativo',
+          uid: uid,
+          approvalLimit: 10000000,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
       }
 
       addNotification('Conta Criada!', 'Seu primeiro acesso foi configurado com sucesso.', 'success');
     } catch (error: any) {
+      console.error('First access error details:', error);
       let message = 'Erro ao configurar primeiro acesso.';
       if (error.code === 'auth/email-already-in-use') {
         message = 'Este usuário já possui uma senha configurada. Tente fazer login.';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'A senha deve ter pelo menos 6 caracteres.';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Email inválido.';
+      } else if (error.message) {
+        message = error.message;
       }
       addNotification('Erro', message, 'error');
     } finally {

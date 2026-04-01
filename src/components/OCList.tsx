@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import POModal from './POModal';
 import RatingModal from './RatingModal';
+import ConfirmModal from './ConfirmModal';
 import { PurchaseOrder, Supplier, User } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -50,6 +51,7 @@ function cn(...inputs: ClassValue[]) {
 export default function OCList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+  const [poToDelete, setPoToDelete] = useState<{id: string, number: number} | null>(null);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -173,7 +175,11 @@ export default function OCList() {
         }
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'purchase-orders');
+      try {
+        handleFirestoreError(error, OperationType.CREATE, 'purchase-orders');
+      } catch (e) {
+        console.error('PO add error:', e);
+      }
     }
   };
 
@@ -201,7 +207,11 @@ export default function OCList() {
       addLog('Aprovou OC', 'PurchaseOrder', po.id, auth.currentUser?.email || 'Unknown');
       addNotification('OC Aprovada', `A ordem de compra #${po.number} foi aprovada com sucesso.`, 'success');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${po.id}`);
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${po.id}`);
+      } catch (e) {
+        console.error('PO approve error:', e);
+      }
     }
   };
 
@@ -226,7 +236,11 @@ export default function OCList() {
       addLog('Registrou Recebimento', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
       addNotification('Recebimento Registrado', `Recebimento de R$ ${receiveAmount.toLocaleString()} registrado para OC #${oc.number}.`, 'info');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${id}`);
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${id}`);
+      } catch (e) {
+        console.error('PO receive error:', e);
+      }
     }
   };
 
@@ -274,18 +288,24 @@ export default function OCList() {
       addLog('Concluiu OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
       addNotification('OC Concluída', `A ordem de compra #${selectedPO.number} foi concluída com nota ${rating}.`, 'success');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${selectedPO.id}`);
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${selectedPO.id}`);
+      } catch (e) {
+        console.error('PO complete error:', e);
+      }
     }
   };
 
   const handleDeletePO = async (id: string, number: number) => {
-    if (window.confirm(`Tem certeza que deseja excluir a OC #${number}?`)) {
+    try {
+      await deleteDoc(doc(db, 'purchase-orders', id));
+      addLog('Excluiu OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
+      addNotification('OC Excluída', `A ordem de compra #${number} foi removida.`, 'warning');
+    } catch (error) {
       try {
-        await deleteDoc(doc(db, 'purchase-orders', id));
-        addLog('Excluiu OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
-        addNotification('OC Excluída', `A ordem de compra #${number} foi removida.`, 'warning');
-      } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `purchase-orders/${id}`);
+      } catch (e) {
+        console.error('PO delete error:', e);
       }
     }
   };
@@ -416,6 +436,16 @@ export default function OCList() {
         supplierName={selectedPO?.supplierName || ''}
       />
 
+      <ConfirmModal
+        isOpen={!!poToDelete}
+        onClose={() => setPoToDelete(null)}
+        onConfirm={() => poToDelete && handleDeletePO(poToDelete.id, poToDelete.number)}
+        title="Excluir Ordem de Compra"
+        message={`Tem certeza que deseja excluir a OC #${poToDelete?.number}? Esta ação não poderá ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
+      />
+
       {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[240px]">
@@ -533,7 +563,7 @@ export default function OCList() {
                   </button>
                 )}
                 <button 
-                  onClick={() => handleDeletePO(oc.id, oc.number)}
+                  onClick={() => setPoToDelete({ id: oc.id, number: oc.number })}
                   className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
                   title="Excluir"
                 >

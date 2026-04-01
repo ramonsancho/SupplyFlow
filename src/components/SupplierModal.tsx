@@ -100,7 +100,11 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
       setNewFamily('');
       setIsAddingFamily(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'families');
+      try {
+        handleFirestoreError(error, OperationType.CREATE, 'families');
+      } catch (e) {
+        console.error('Family add error:', e);
+      }
     }
   };
 
