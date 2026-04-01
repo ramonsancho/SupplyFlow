@@ -1,0 +1,5 @@
+{
+  "name": "SupplyFlow - Gestão de Compras",
+  "description": "Sistema completo de gestão de compras, fornecedores, cotações e ordens de compra com dashboard de KPIs e controle de saldo.",
+  "requestFramePermissions": []
+}

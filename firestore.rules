@@ -1,0 +1,261 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: suppliers
+// Document ID: auto-generated
+// Fields:
+//   - id: string (required)
+//   - name: string (required, 1-100 chars)
+//   - document: string (required, 1-20 chars)
+//   - address: string (optional, 0-200 chars)
+//   - contactName: string (optional, 0-100 chars)
+//   - email: string (required, valid email)
+//   - phone: string (optional, 0-20 chars)
+//   - families: list (required, strings, max 10 items)
+//   - paymentTerms: string (optional, 0-100 chars)
+//   - rating: number (optional, 0-10)
+//   - isCritical: bool (optional)
+//   - notes: string (optional, 0-1000 chars)
+//   - createdAt: timestamp (required)
+//
+// Collection: rfqs
+// Document ID: auto-generated
+// Fields:
+//   - id: string (required)
+//   - number: int (required)
+//   - title: string (required, 1-100 chars)
+//   - status: string (required, enum: ['draft', 'sent', 'closed'])
+//   - desiredDate: string (optional, valid date string)
+//   - items: list (required, maps, max 50 items)
+//   - createdAt: timestamp (required)
+//
+// Collection: purchase-orders
+// Document ID: auto-generated
+// Fields:
+//   - id: string (required)
+//   - number: int (required)
+//   - supplierId: string (required)
+//   - supplierName: string (required)
+//   - status: string (required, enum: ['draft', 'approved', 'sent', 'received', 'closed'])
+//   - totalAmount: number (required, positive)
+//   - originalAmount: number (optional, positive)
+//   - receivedAmount: number (required, positive)
+//   - items: list (required, maps, max 50 items)
+//   - rating: number (optional, 0-10)
+//   - completedAt: timestamp (optional)
+//   - approvedAt: timestamp (optional)
+//   - createdAt: timestamp (required)
+//
+// Collection: audit-logs
+// Document ID: auto-generated
+// Fields:
+//   - id: string (required)
+//   - userId: string (required)
+//   - userEmail: string (required)
+//   - action: string (required)
+//   - entity: string (required)
+//   - entityId: string (required)
+//   - timestamp: timestamp (required)
+//
+// Collection: notifications
+// Document ID: auto-generated
+// Fields:
+//   - id: string (required)
+//   - userId: string (required)
+//   - title: string (required, 1-100 chars)
+//   - message: string (required, 1-500 chars)
+//   - type: string (required, enum: ['info', 'success', 'warning', 'error'])
+//   - read: bool (required)
+//   - timestamp: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isActive() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo';
+    }
+
+    function canAccess() {
+      return isAuthenticated() && isActive();
+    }
+
+    function isAdmin() {
+      return canAccess() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador') ||
+         (request.auth.token.email.lower() == "ramon.souza@oeg.group" && request.auth.token.email_verified == true) ||
+         (request.auth.token.email.lower() == "ramonsancho@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidSupplier(data) {
+      return hasRequiredFields(['name', 'document', 'email', 'families', 'createdAt']) &&
+             isValidString(data.name, 1, 100) &&
+             isValidString(data.document, 1, 20) &&
+             isValidEmail(data.email) &&
+             data.families is list &&
+             (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
+             (!('isCritical' in data) || data.isCritical is bool) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidRFQ(data) {
+      return hasRequiredFields(['number', 'title', 'status', 'items', 'createdAt']) &&
+             data.number is int &&
+             isValidString(data.title, 1, 100) &&
+             data.status in ['draft', 'sent', 'closed'] &&
+             data.items is list &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidPO(data) {
+      return hasRequiredFields(['number', 'supplierId', 'supplierName', 'status', 'totalAmount', 'receivedAmount', 'items', 'createdAt']) &&
+             data.number is int &&
+             data.supplierId is string &&
+             data.status in ['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed'] &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             (!('originalAmount' in data) || (data.originalAmount is number && data.originalAmount >= 0)) &&
+             data.receivedAmount is number && data.receivedAmount >= 0 &&
+             data.items is list &&
+             (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
+             (!('completedAt' in data) || data.completedAt is timestamp) &&
+             (!('approvedAt' in data) || data.approvedAt is timestamp) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return hasRequiredFields(['userId', 'userEmail', 'action', 'entity', 'entityId', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.userEmail == request.auth.token.email &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['userId', 'title', 'message', 'type', 'read', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             isValidString(data.title, 1, 100) &&
+             isValidString(data.message, 1, 500) &&
+             data.type in ['info', 'success', 'warning', 'error'] &&
+             data.read is bool &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidContract(data) {
+      return hasRequiredFields(['supplierId', 'supplierName', 'startDate', 'endDate', 'status', 'createdAt']) &&
+             data.supplierId is string &&
+             data.supplierName is string &&
+             data.startDate is string &&
+             data.endDate is string &&
+             data.status in ['active', 'expired', 'terminated'] &&
+             (!('lastAdjustmentDate' in data) || data.lastAdjustmentDate is string) &&
+             (!('lastAdjustmentPercentage' in data) || data.lastAdjustmentPercentage is number) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['name', 'email', 'role', 'status', 'createdAt']) &&
+             isValidString(data.name, 1, 100) &&
+             isValidEmail(data.email) &&
+             data.role in ['Administrador', 'Comprador', 'Aprovador'] &&
+             data.status in ['Ativo', 'Inativo'] &&
+             (!('approvalLimit' in data) || data.approvalLimit is number) &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if canAccess();
+      allow create: if ((canAccess() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email) || isAdmin()) && isValidUser(request.resource.data);
+      allow update: if ((canAccess() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && request.resource.data.role == resource.data.role) || isAdmin()) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /suppliers/{supplierId} {
+      allow read: if canAccess();
+      allow create: if canAccess() && isValidSupplier(request.resource.data);
+      allow update: if canAccess() && isValidSupplier(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /rfqs/{rfqId} {
+      allow read: if canAccess();
+      allow create: if canAccess() && isValidRFQ(request.resource.data);
+      allow update: if canAccess() && isValidRFQ(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /purchase-orders/{poId} {
+      allow read: if canAccess();
+      allow create: if canAccess() && isValidPO(request.resource.data);
+      allow update: if canAccess() && isValidPO(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /families/{familyId} {
+      allow read: if canAccess();
+      allow create: if canAccess() && request.resource.data.keys().hasAll(['name', 'createdAt']) && request.resource.data.name is string;
+      allow update, delete: if isAdmin();
+    }
+
+    match /audit-logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if canAccess() && isValidAuditLog(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /contracts/{contractId} {
+      allow read: if canAccess();
+      allow create: if canAccess() && isValidContract(request.resource.data);
+      allow update: if canAccess() && isValidContract(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if canAccess() && resource.data.userId == request.auth.uid;
+      allow create: if canAccess() && isValidNotification(request.resource.data);
+      allow update: if canAccess() && resource.data.userId == request.auth.uid && isValidNotification(request.resource.data);
+      allow delete: if canAccess() && resource.data.userId == request.auth.uid;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

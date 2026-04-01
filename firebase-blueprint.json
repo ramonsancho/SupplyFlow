@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Fornecedor cadastrado no sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "document": { "type": "string" },
+        "address": { "type": "string" },
+        "contactName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "families": { "type": "array", "items": { "type": "string" } },
+        "paymentTerms": { "type": "string" },
+        "rating": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "document", "email", "families"]
+    },
+    "RFQ": {
+      "title": "RFQ",
+      "description": "Solicitação de Cotação",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "number": { "type": "integer" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "sent", "closed"] },
+        "desiredDate": { "type": "string", "format": "date" },
+        "items": { "type": "array", "items": { "$ref": "#/entities/RFQItem" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "number", "status", "items"]
+    },
+    "RFQItem": {
+      "title": "RFQItem",
+      "description": "Item de uma cotação",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" }
+      }
+    },
+    "PurchaseOrder": {
+      "title": "PurchaseOrder",
+      "description": "Ordem de Compra",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "number": { "type": "integer" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "pending_approval", "approved", "sent", "received", "closed"] },
+        "totalAmount": { "type": "number" },
+        "receivedAmount": { "type": "number" },
+        "items": { "type": "array", "items": { "$ref": "#/entities/POItem" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "approvedBy": { "type": "string" },
+        "approvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["number", "supplierId", "status", "totalAmount"]
+    },
+    "POItem": {
+      "title": "POItem",
+      "description": "Item de uma ordem de compra",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "unitPrice": { "type": "number" },
+        "tax": { "type": "number" }
+      }
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Log de auditoria do sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "entity": { "type": "string" },
+        "entityId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Family": {
+      "title": "Family",
+      "description": "Família de produtos ou serviços",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Usuário do sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["Administrador", "Comprador", "Aprovador"] },
+        "status": { "type": "string", "enum": ["Ativo", "Inativo"] },
+        "approvalLimit": { "type": "number", "description": "Limite de aprovação de valor" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role", "status"]
+    },
+    "Contract": {
+      "title": "Contract",
+      "description": "Contrato vigente com fornecedor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["active", "expired", "terminated"] },
+        "lastAdjustmentDate": { "type": "string", "format": "date" },
+        "lastAdjustmentPercentage": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplierId", "supplierName", "startDate", "endDate", "status"]
+    }
+  },
+  "firestore": {
+    "/suppliers": { "schema": "Supplier", "description": "Coleção de fornecedores" },
+    "/rfqs": { "schema": "RFQ", "description": "Coleção de cotações" },
+    "/purchase-orders": { "schema": "PurchaseOrder", "description": "Coleção de ordens de compra" },
+    "/audit-logs": { "schema": "AuditLog", "description": "Coleção de logs de auditoria" },
+    "/families": { "schema": "Family", "description": "Coleção de famílias de produtos/serviços" },
+    "/users": { "schema": "User", "description": "Coleção de usuários do sistema" },
+    "/contracts": { "schema": "Contract", "description": "Coleção de contratos vigentes" }
+  }
+}
