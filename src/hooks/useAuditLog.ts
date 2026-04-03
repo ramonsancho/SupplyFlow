@@ -16,8 +16,11 @@ export function useAuditLog() {
       })) as AuditLog[];
       setLogs(logData);
     }, (error) => {
-      console.error('useAuditLog error:', error);
-      // Don't throw here, just log and maybe set an empty state or error state
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'audit-logs');
+      } catch (e) {
+        console.error('useAuditLog error:', e);
+      }
       setLogs([]);
     });
 

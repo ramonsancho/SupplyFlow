@@ -35,9 +35,10 @@ interface SupplierModalProps {
   onClose: () => void;
   onSubmit: (data: SupplierFormData) => void;
   initialData?: Partial<Supplier>;
+  readOnly?: boolean;
 }
 
-export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }: SupplierModalProps) {
+export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, readOnly = false }: SupplierModalProps) {
   const [families, setFamilies] = useState<string[]>(DEFAULT_FAMILIES);
   const [newFamily, setNewFamily] = useState('');
   const [isAddingFamily, setIsAddingFamily] = useState(false);
@@ -50,6 +51,15 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
       ...initialData
     }
   });
+
+  useEffect(() => {
+    if (isOpen && initialData) {
+      // Reset form with initialData when modal opens
+      Object.entries(initialData).forEach(([key, value]) => {
+        setValue(key as any, value);
+      });
+    }
+  }, [isOpen, initialData, setValue]);
 
   useEffect(() => {
     const q = query(collection(db, 'families'), orderBy('name', 'asc'));
@@ -74,6 +84,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
   if (!isOpen) return null;
 
   const toggleFamily = (family: string) => {
+    if (readOnly) return;
     const current = selectedFamilies;
     if (current.includes(family)) {
       setValue('families', current.filter(f => f !== family));
@@ -83,7 +94,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
   };
 
   const handleAddFamily = async () => {
-    if (!newFamily.trim()) return;
+    if (readOnly || !newFamily.trim()) return;
     
     const normalized = newFamily.trim();
     if (families.includes(normalized)) {
@@ -114,9 +125,11 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
         <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between bg-[#F5F5F5]">
           <div>
             <h3 className="text-xl font-bold text-[#141414]">
-              {initialData ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+              {readOnly ? 'Detalhes do Fornecedor' : initialData ? 'Editar Fornecedor' : 'Novo Fornecedor'}
             </h3>
-            <p className="text-xs text-[#8E9299] mt-1 font-medium uppercase tracking-widest">Cadastro e Gerenciamento</p>
+            <p className="text-xs text-[#8E9299] mt-1 font-medium uppercase tracking-widest">
+              {readOnly ? 'Visualização de Cadastro' : 'Cadastro e Gerenciamento'}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-all">
             <X size={24} />
@@ -129,7 +142,8 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Razão Social / Nome</label>
               <input 
                 {...register('name')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="Ex: Tech Solutions Ltda"
               />
               {errors.name && <p className="text-xs text-red-500 font-medium">{errors.name.message}</p>}
@@ -139,7 +153,8 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">CNPJ / CPF</label>
               <input 
                 {...register('document')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="00.000.000/0001-00"
               />
               {errors.document && <p className="text-xs text-red-500 font-medium">{errors.document.message}</p>}
@@ -149,7 +164,8 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Email de Contato</label>
               <input 
                 {...register('email')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="contato@empresa.com"
               />
               {errors.email && <p className="text-xs text-red-500 font-medium">{errors.email.message}</p>}
@@ -159,7 +175,8 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Telefone</label>
               <input 
                 {...register('phone')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="(11) 99999-9999"
               />
               {errors.phone && <p className="text-xs text-red-500 font-medium">{errors.phone.message}</p>}
@@ -169,7 +186,8 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Endereço Completo</label>
               <input 
                 {...register('address')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="Rua, Número, Bairro, Cidade - UF"
               />
               {errors.address && <p className="text-xs text-red-500 font-medium">{errors.address.message}</p>}
@@ -179,7 +197,8 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Nome do Contato</label>
               <input 
                 {...register('contactName')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="Nome do responsável"
               />
               {errors.contactName && <p className="text-xs text-red-500 font-medium">{errors.contactName.message}</p>}
@@ -189,13 +208,20 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Condições de Pagamento</label>
               <input 
                 {...register('paymentTerms')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                disabled={readOnly}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
                 placeholder="Ex: 30/60 dias, À vista"
               />
               {errors.paymentTerms && <p className="text-xs text-red-500 font-medium">{errors.paymentTerms.message}</p>}
             </div>
 
-            <div className="md:col-span-2 flex items-center gap-3 p-4 bg-[#F5F5F5] rounded-2xl border-2 border-transparent hover:border-[#141414] transition-all cursor-pointer" onClick={() => setValue('isCritical', !watch('isCritical'))}>
+            <div 
+              className={cn(
+                "md:col-span-2 flex items-center gap-3 p-4 bg-[#F5F5F5] rounded-2xl border-2 border-transparent transition-all",
+                !readOnly && "hover:border-[#141414] cursor-pointer"
+              )} 
+              onClick={() => !readOnly && setValue('isCritical', !watch('isCritical'))}
+            >
               <div className={cn(
                 "w-12 h-6 rounded-full relative transition-colors duration-200",
                 watch('isCritical') ? "bg-red-500" : "bg-gray-300"
@@ -225,54 +251,57 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
                     "px-4 py-2 rounded-full text-xs font-bold transition-all border",
                     selectedFamilies.includes(family)
                       ? "bg-[#141414] text-white border-[#141414]"
-                      : "bg-white text-[#8E9299] border-[#E5E5E5] hover:border-[#141414]"
+                      : "bg-white text-[#8E9299] border-[#E5E5E5] hover:border-[#141414]",
+                    readOnly && "cursor-default"
                   )}
                 >
                   {family}
                 </button>
               ))}
               
-              {!isAddingFamily ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAddingFamily(true)}
-                  className="px-4 py-2 rounded-full text-xs font-bold transition-all border border-dashed border-[#E5E5E5] text-[#8E9299] hover:border-[#141414] hover:text-[#141414] flex items-center gap-1"
-                >
-                  <Plus size={14} />
-                  Nova Família
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newFamily}
-                    onChange={(e) => setNewFamily(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddFamily();
-                      }
-                      if (e.key === 'Escape') setIsAddingFamily(false);
-                    }}
-                    className="px-4 py-2 rounded-full text-xs font-bold border border-[#141414] focus:outline-none w-32"
-                    placeholder="Nome..."
-                  />
+              {!readOnly && (
+                !isAddingFamily ? (
                   <button
                     type="button"
-                    onClick={handleAddFamily}
-                    className="p-2 bg-[#141414] text-white rounded-full hover:bg-black transition-all"
+                    onClick={() => setIsAddingFamily(true)}
+                    className="px-4 py-2 rounded-full text-xs font-bold transition-all border border-dashed border-[#E5E5E5] text-[#8E9299] hover:border-[#141414] hover:text-[#141414] flex items-center gap-1"
                   >
                     <Plus size={14} />
+                    Nova Família
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingFamily(false)}
-                    className="p-2 text-[#8E9299] hover:text-[#141414]"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newFamily}
+                      onChange={(e) => setNewFamily(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddFamily();
+                        }
+                        if (e.key === 'Escape') setIsAddingFamily(false);
+                      }}
+                      className="px-4 py-2 rounded-full text-xs font-bold border border-[#141414] focus:outline-none w-32"
+                      placeholder="Nome..."
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddFamily}
+                      className="p-2 bg-[#141414] text-white rounded-full hover:bg-black transition-all"
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingFamily(false)}
+                      className="p-2 text-[#8E9299] hover:text-[#141414]"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )
               )}
             </div>
             {errors.families && <p className="text-xs text-red-500 font-medium">{errors.families.message}</p>}
@@ -282,8 +311,9 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
             <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Notas Internas</label>
             <textarea 
               {...register('notes')}
+              disabled={readOnly}
               rows={3}
-              className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all resize-none"
+              className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all resize-none disabled:opacity-70"
               placeholder="Observações sobre o fornecedor..."
             />
           </div>
@@ -294,15 +324,17 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData }
               onClick={onClose}
               className="px-6 py-3 text-sm font-bold text-[#8E9299] hover:text-[#141414] transition-colors"
             >
-              Cancelar
+              {readOnly ? 'Fechar' : 'Cancelar'}
             </button>
-            <button 
-              type="submit"
-              className="flex items-center gap-2 bg-[#141414] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
-            >
-              <Save size={20} />
-              <span>Salvar Fornecedor</span>
-            </button>
+            {!readOnly && (
+              <button 
+                type="submit"
+                className="flex items-center gap-2 bg-[#141414] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+              >
+                <Save size={20} />
+                <span>Salvar Fornecedor</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

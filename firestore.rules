@@ -19,6 +19,19 @@
 //   - notes: string (optional, 0-1000 chars)
 //   - createdAt: timestamp (required)
 //
+// Collection: proposals
+// Document ID: auto-generated
+// Fields:
+//   - id: string (required)
+//   - rfqId: string (required)
+//   - supplierId: string (required)
+//   - supplierName: string (required)
+//   - totalValue: number (required, positive)
+//   - deliveryDate: string (required, valid date string)
+//   - status: string (required, enum: ['pending', 'accepted', 'rejected'])
+//   - items: list (required, maps, max 50 items)
+//   - createdAt: timestamp (required)
+//
 // Collection: rfqs
 // Document ID: auto-generated
 // Fields:
@@ -152,6 +165,11 @@ service cloud.firestore {
              (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
              (!('completedAt' in data) || data.completedAt is timestamp) &&
              (!('approvedAt' in data) || data.approvedAt is timestamp) &&
+             (!('approvedBy' in data) || data.approvedBy is string) &&
+             (!('approvedByName' in data) || data.approvedByName is string) &&
+             (!('createdBy' in data) || data.createdBy is string) &&
+             (!('createdByName' in data) || data.createdByName is string) &&
+             (!('family' in data) || data.family is string) &&
              data.createdAt is timestamp;
     }
 
@@ -181,6 +199,18 @@ service cloud.firestore {
              data.status in ['active', 'expired', 'terminated'] &&
              (!('lastAdjustmentDate' in data) || data.lastAdjustmentDate is string) &&
              (!('lastAdjustmentPercentage' in data) || data.lastAdjustmentPercentage is number) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidProposal(data) {
+      return hasRequiredFields(['rfqId', 'supplierId', 'supplierName', 'totalValue', 'deliveryDate', 'status', 'items', 'createdAt']) &&
+             data.rfqId is string &&
+             data.supplierId is string &&
+             data.supplierName is string &&
+             data.totalValue is number && data.totalValue >= 0 &&
+             data.deliveryDate is string &&
+             data.status in ['pending', 'accepted', 'rejected'] &&
+             data.items is list &&
              data.createdAt is timestamp;
     }
 
@@ -243,6 +273,13 @@ service cloud.firestore {
       allow read: if canAccess();
       allow create: if canAccess() && isValidContract(request.resource.data);
       allow update: if canAccess() && isValidContract(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /proposals/{proposalId} {
+      allow read: if canAccess();
+      allow create: if canAccess() && isValidProposal(request.resource.data);
+      allow update: if canAccess() && isValidProposal(request.resource.data);
       allow delete: if isAdmin();
     }
 

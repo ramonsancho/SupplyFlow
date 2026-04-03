@@ -14,13 +14,14 @@ import {
 import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight, FileText } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
-import { PurchaseOrder, RFQ, Supplier } from '../types';
+import { PurchaseOrder, RFQ, Supplier, Proposal } from '../types';
 
 const COLORS = ['#141414', '#8E9299', '#E5E5E5', '#F5F5F5'];
 
 export default function Dashboard() {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,27 +57,49 @@ export default function Dashboard() {
       }
     });
 
+    const unsubscribeProposals = onSnapshot(collection(db, 'proposals'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Proposal[];
+      setProposals(data);
+    }, (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'proposals');
+      } catch (e) {
+        console.error('Dashboard proposals error:', e);
+      }
+    });
+
     const unsubscribeSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Supplier[];
       setSuppliers(data);
       setIsLoading(false);
     }, (error) => {
-      console.error('Dashboard suppliers error:', error);
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'suppliers');
+      } catch (e) {
+        console.error('Dashboard suppliers error:', e);
+      }
       setIsLoading(false);
     });
 
     return () => {
       unsubscribePOs();
       unsubscribeRFQs();
+      unsubscribeProposals();
       unsubscribeSuppliers();
     };
   }, []);
 
   // Calculate KPIs
   const totalSpent = pos.reduce((acc, po) => acc + po.totalAmount, 0);
-  const totalSavings = pos.reduce((acc, po) => {
-    if (po.originalAmount && po.originalAmount > po.totalAmount) {
-      return acc + (po.originalAmount - po.totalAmount);
+  
+  // Total Savings: difference between highest and accepted proposal for each RFQ
+  const totalSavings = rfqs.reduce((acc, rfq) => {
+    const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
+    const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
+    if (acceptedProposal && rfqProposals.length >= 2) {
+      const prices = rfqProposals.map(p => p.totalValue);
+      const maxPrice = Math.max(...prices);
+      return acc + (maxPrice - acceptedProposal.totalValue);
     }
     return acc;
   }, 0);
@@ -169,8 +192,24 @@ export default function Dashboard() {
     
     if (monthIndex !== -1) {
       monthlyHistory[monthIndex].spend += po.totalAmount;
-      if (po.originalAmount && po.originalAmount > po.totalAmount) {
-        monthlyHistory[monthIndex].savings += (po.originalAmount - po.totalAmount);
+    }
+  });
+
+  rfqs.forEach(rfq => {
+    const rfqDate = rfq.createdAt ? new Date(rfq.createdAt) : null;
+    if (!rfqDate) return;
+
+    const monthIndex = monthlyHistory.findIndex(m => 
+      m.month === rfqDate.getMonth() && m.year === rfqDate.getFullYear()
+    );
+
+    if (monthIndex !== -1) {
+      const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
+      const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
+      if (acceptedProposal && rfqProposals.length >= 2) {
+        const prices = rfqProposals.map(p => p.totalValue);
+        const maxPrice = Math.max(...prices);
+        monthlyHistory[monthIndex].savings += (maxPrice - acceptedProposal.totalValue);
       }
     }
   });
@@ -371,7 +410,7 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 mt-4 md:mt-0">
               {pieData.map((item, index) => (
-                <div key={item.name} className="flex items-center gap-3">
+                <div key={`${item.name}-${index}`} className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-[#141414]">{item.name}</span>
@@ -393,7 +432,7 @@ export default function Dashboard() {
           </div>
           <div className="divide-y divide-[#E5E5E5]">
             {topSuppliers.map((s, index) => (
-              <div key={s.name} className="p-6 flex items-center justify-between hover:bg-[#F5F5F5] transition-colors">
+              <div key={`${s.name}-${index}`} className="p-6 flex items-center justify-between hover:bg-[#F5F5F5] transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="w-8 h-8 rounded-full bg-[#141414] text-white flex items-center justify-center text-xs font-bold">
                     {index + 1}

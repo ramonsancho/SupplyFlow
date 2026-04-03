@@ -135,6 +135,36 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["supplierId", "supplierName", "startDate", "endDate", "status"]
+    },
+    "Proposal": {
+      "title": "Proposal",
+      "description": "Proposta recebida de um fornecedor para uma RFQ",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rfqId": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "totalValue": { "type": "number" },
+        "deliveryDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "items": { "type": "array", "items": { "$ref": "#/entities/ProposalItem" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["rfqId", "supplierId", "supplierName", "totalValue", "deliveryDate", "status", "items"]
+    },
+    "ProposalItem": {
+      "title": "ProposalItem",
+      "description": "Item de uma proposta",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "unitPrice": { "type": "number" }
+      },
+      "required": ["description", "quantity", "unit", "unitPrice"]
     }
   },
   "firestore": {
@@ -144,6 +174,7 @@
     "/audit-logs": { "schema": "AuditLog", "description": "Coleção de logs de auditoria" },
     "/families": { "schema": "Family", "description": "Coleção de famílias de produtos/serviços" },
     "/users": { "schema": "User", "description": "Coleção de usuários do sistema" },
-    "/contracts": { "schema": "Contract", "description": "Coleção de contratos vigentes" }
+    "/contracts": { "schema": "Contract", "description": "Coleção de contratos vigentes" },
+    "/proposals": { "schema": "Proposal", "description": "Coleção de propostas de fornecedores" }
   }
 }

@@ -66,7 +66,7 @@ export default function App() {
         console.error('Error seeding admin:', error);
       }
     };
-    seedAdmin();
+    seedAdmin().catch(e => console.error('Seed admin error:', e));
 
     const timeout = setTimeout(() => {
       setLoading(false);
@@ -75,57 +75,61 @@ export default function App() {
     let unsubProfile: (() => void) | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      clearTimeout(timeout);
-      console.log('onAuthStateChanged fired:', user?.email);
-      
-      // Limpar inscrição anterior se existir
-      if (unsubProfile) {
-        unsubProfile();
-        unsubProfile = null;
-      }
+      try {
+        clearTimeout(timeout);
+        
+        // Limpar inscrição anterior se existir
+        if (unsubProfile) {
+          unsubProfile();
+          unsubProfile = null;
+        }
 
-      setUser(user);
-      
-      if (user) {
-        // Monitorar status do usuário em tempo real
-        const userRef = doc(db, 'users', user.uid);
-        unsubProfile = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            const userData = doc.data();
-            if (userData.status === 'Inativo') {
-              signOut(auth).catch(e => console.error('Sign out error:', e));
-            }
-          }
-        }, (error) => {
-          console.error('onSnapshot error:', error);
-        });
-
-        // Se o usuário logado for o admin, garantir que o UID dele esteja vinculado ao documento de admin
-        const email = user.email?.toLowerCase();
-        if (email === 'ramonsancho@gmail.com' || email === 'ramon.souza@oeg.group') {
-          try {
-            const userSnap = await getDoc(userRef);
-            
-            if (!userSnap.exists()) {
-              const adminRef = doc(db, 'users', 'initial-admin');
-              const adminSnap = await getDoc(adminRef);
-              
-              if (adminSnap.exists()) {
-                const adminData = adminSnap.data();
-                await setDoc(userRef, {
-                  ...adminData,
-                  uid: user.uid,
-                  updatedAt: serverTimestamp()
-                });
-                await deleteDoc(adminRef);
+        setUser(user);
+        
+        if (user) {
+          // Monitorar status do usuário em tempo real
+          const userRef = doc(db, 'users', user.uid);
+          unsubProfile = onSnapshot(userRef, (doc) => {
+            if (doc.exists()) {
+              const userData = doc.data();
+              if (userData.status === 'Inativo') {
+                signOut(auth).catch(e => console.error('Sign out error:', e));
               }
             }
-          } catch (error) {
-            console.error('Migration error:', error);
+          }, (error) => {
+            console.error('onSnapshot error:', error);
+          });
+
+          // Se o usuário logado for o admin, garantir que o UID dele esteja vinculado ao documento de admin
+          const email = user.email?.toLowerCase();
+          if (email === 'ramonsancho@gmail.com' || email === 'ramon.souza@oeg.group') {
+            try {
+              const userSnap = await getDoc(userRef);
+              
+              if (!userSnap.exists()) {
+                const adminRef = doc(db, 'users', 'initial-admin');
+                const adminSnap = await getDoc(adminRef);
+                
+                if (adminSnap.exists()) {
+                  const adminData = adminSnap.data();
+                  await setDoc(userRef, {
+                    ...adminData,
+                    uid: user.uid,
+                    updatedAt: serverTimestamp()
+                  });
+                  await deleteDoc(adminRef);
+                }
+              }
+            } catch (error) {
+              console.error('Migration error:', error);
+            }
           }
         }
+        setLoading(false);
+      } catch (error) {
+        console.error('onAuthStateChanged error:', error);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {

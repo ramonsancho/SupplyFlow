@@ -45,6 +45,9 @@ export default function SupplierList() {
   const [families, setFamilies] = useState<string[]>(['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística']);
   const [selectedFamily, setSelectedFamily] = useState('Todas as Famílias');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | undefined>();
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterCritical, setFilterCritical] = useState<boolean | null>(null);
   const [supplierToDelete, setSupplierToDelete] = useState<{id: string, name: string} | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
@@ -97,19 +100,20 @@ export default function SupplierList() {
           ...data,
           updatedAt: serverTimestamp()
         });
-        addLog('Editou Fornecedor', 'Supplier', editingSupplier.id, auth.currentUser?.email || 'Unknown');
-        addNotification('Fornecedor Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
+        await addLog('Editou Fornecedor', 'Supplier', editingSupplier.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('Fornecedor Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
         const docRef = await addDoc(collection(db, 'suppliers'), {
           ...data,
           createdAt: serverTimestamp(),
           rating: 0
         });
-        addLog('Cadastrou Fornecedor', 'Supplier', docRef.id, auth.currentUser?.email || 'Unknown');
-        addNotification('Fornecedor Cadastrado', `${data.name} foi adicionado com sucesso.`, 'success');
+        await addLog('Cadastrou Fornecedor', 'Supplier', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('Fornecedor Cadastrado', `${data.name} foi adicionado com sucesso.`, 'success');
       }
       setIsModalOpen(false);
       setEditingSupplier(undefined);
+      setIsReadOnly(false);
     } catch (error) {
       try {
         handleFirestoreError(error, editingSupplier ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
@@ -122,8 +126,8 @@ export default function SupplierList() {
   const handleDeleteSupplier = async (id: string, name: string) => {
     try {
       await deleteDoc(doc(db, 'suppliers', id));
-      addLog('Excluiu Fornecedor', 'Supplier', id, auth.currentUser?.email || 'Unknown');
-      addNotification('Fornecedor Excluído', `${name} foi removido do sistema.`, 'warning');
+      await addLog('Excluiu Fornecedor', 'Supplier', id, auth.currentUser?.email || 'Unknown');
+      await addNotification('Fornecedor Excluído', `${name} foi removido do sistema.`, 'warning');
     } catch (error) {
       try {
         handleFirestoreError(error, OperationType.DELETE, `suppliers/${id}`);
@@ -137,7 +141,8 @@ export default function SupplierList() {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.document.includes(searchTerm);
     const matchesFamily = selectedFamily === 'Todas as Famílias' || s.families.includes(selectedFamily);
-    return matchesSearch && matchesFamily;
+    const matchesCritical = filterCritical === null || s.isCritical === filterCritical;
+    return matchesSearch && matchesFamily && matchesCritical;
   });
 
   return (
@@ -148,7 +153,11 @@ export default function SupplierList() {
           <p className="text-[#8E9299] mt-1">Gerencie sua base de parceiros e categorias.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingSupplier(undefined);
+            setIsReadOnly(false);
+            setIsModalOpen(true);
+          }}
           className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
         >
           <Plus size={20} />
@@ -161,15 +170,17 @@ export default function SupplierList() {
         onClose={() => {
           setIsModalOpen(false);
           setEditingSupplier(undefined);
+          setIsReadOnly(false);
         }} 
-        onSubmit={handleSaveSupplier}
+        onSubmit={(data) => handleSaveSupplier(data).catch(err => console.error('Error in handleSaveSupplier:', err))}
         initialData={editingSupplier}
+        readOnly={isReadOnly}
       />
 
       <ConfirmModal
         isOpen={!!supplierToDelete}
         onClose={() => setSupplierToDelete(null)}
-        onConfirm={() => supplierToDelete && handleDeleteSupplier(supplierToDelete.id, supplierToDelete.name)}
+        onConfirm={() => supplierToDelete && handleDeleteSupplier(supplierToDelete.id, supplierToDelete.name).catch(err => console.error('Error in handleDeleteSupplier:', err))}
         title="Excluir Fornecedor"
         message={`Tem certeza que deseja excluir o fornecedor ${supplierToDelete?.name}? Esta ação não poderá ser desfeita.`}
         confirmText="Excluir"
@@ -177,31 +188,78 @@ export default function SupplierList() {
       />
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome ou CNPJ..." 
-            className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#141414]"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="space-y-4">
+        <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+            <input 
+              type="text" 
+              placeholder="Buscar por nome ou CNPJ..." 
+              className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#141414]"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg border transition-all",
+              showAdvancedFilters 
+                ? "bg-[#141414] text-white border-[#141414]" 
+                : "text-[#141414] bg-white border-[#E5E5E5] hover:bg-[#F5F5F5]"
+            )}
+          >
+            <Filter size={18} />
+            <span>Filtros Avançados</span>
+          </button>
+          <select 
+            className="px-4 py-2 text-sm font-bold text-[#141414] bg-white border border-[#E5E5E5] rounded-lg focus:ring-2 focus:ring-[#141414]"
+            value={selectedFamily}
+            onChange={(e) => setSelectedFamily(e.target.value)}
+          >
+            <option>Todas as Famílias</option>
+            {families.map(family => (
+              <option key={family} value={family}>{family}</option>
+            ))}
+          </select>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#141414] bg-white border border-[#E5E5E5] rounded-lg hover:bg-[#F5F5F5] transition-colors">
-          <Filter size={18} />
-          <span>Filtros Avançados</span>
-        </button>
-        <select 
-          className="px-4 py-2 text-sm font-bold text-[#141414] bg-white border border-[#E5E5E5] rounded-lg focus:ring-2 focus:ring-[#141414]"
-          value={selectedFamily}
-          onChange={(e) => setSelectedFamily(e.target.value)}
-        >
-          <option>Todas as Famílias</option>
-          {families.map(family => (
-            <option key={family} value={family}>{family}</option>
-          ))}
-        </select>
+
+        {showAdvancedFilters && (
+          <div className="bg-[#F5F5F5] p-6 rounded-2xl border border-[#E5E5E5] flex flex-wrap gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Criticidade</label>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setFilterCritical(null)}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold border transition-all",
+                    filterCritical === null ? "bg-[#141414] text-white border-[#141414]" : "bg-white text-[#141414] border-[#E5E5E5]"
+                  )}
+                >
+                  Todos
+                </button>
+                <button 
+                  onClick={() => setFilterCritical(true)}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold border transition-all",
+                    filterCritical === true ? "bg-red-500 text-white border-red-500" : "bg-white text-[#141414] border-[#E5E5E5]"
+                  )}
+                >
+                  Críticos
+                </button>
+                <button 
+                  onClick={() => setFilterCritical(false)}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold border transition-all",
+                    filterCritical === false ? "bg-green-500 text-white border-green-500" : "bg-white text-[#141414] border-[#E5E5E5]"
+                  )}
+                >
+                  Não Críticos
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Supplier Grid */}
@@ -268,6 +326,7 @@ export default function SupplierList() {
                   <button 
                     onClick={() => {
                       setEditingSupplier(supplier);
+                      setIsReadOnly(false);
                       setIsModalOpen(true);
                     }}
                     className="p-2 text-[#8E9299] hover:text-[#141414] hover:bg-[#F5F5F5] rounded-full transition-all"
@@ -283,7 +342,14 @@ export default function SupplierList() {
                     <Trash2 size={18} />
                   </button>
                 </div>
-                <button className="flex items-center gap-2 text-xs font-bold text-[#141414] hover:gap-3 transition-all">
+                <button 
+                  onClick={() => {
+                    setEditingSupplier(supplier);
+                    setIsReadOnly(true);
+                    setIsModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 text-xs font-bold text-[#141414] hover:gap-3 transition-all"
+                >
                   VER DETALHES
                   <ChevronRight size={16} />
                 </button>

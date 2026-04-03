@@ -20,7 +20,7 @@ import {
 import { useNotifications } from '../hooks/useNotifications';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { auth, db } from '../firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { User as UserType } from '../types';
@@ -33,6 +33,7 @@ export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
   const [userProfile, setUserProfile] = useState<UserType | null>(null);
+  const profileUnsubscribeRef = React.useRef<(() => void) | null>(null);
   const navigate = useNavigate();
   const { notifications, markAsRead } = useNotifications();
 
@@ -45,14 +46,28 @@ export default function Layout() {
             setUserProfile({ ...doc.data(), id: doc.id } as UserType);
           }
         }, (error) => {
-          console.error('Layout profile fetch error:', error);
+          try {
+            handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+          } catch (e) {
+            console.error('Layout profile fetch error:', e);
+          }
         });
-        return () => unsubscribeProfile();
+        profileUnsubscribeRef.current = unsubscribeProfile;
       } else {
         setUserProfile(null);
+        if (profileUnsubscribeRef.current) {
+          profileUnsubscribeRef.current();
+          profileUnsubscribeRef.current = null;
+        }
       }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
+        profileUnsubscribeRef.current = null;
+      }
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -91,8 +106,8 @@ export default function Layout() {
       <aside className="hidden md:flex flex-col w-64 bg-[#001F3F] border-r border-[#002b56]">
         <div className="p-6 border-b border-[#002b56] flex items-center gap-3">
           <img 
-            src="https://ais-dev-3gcupuvg3itndz43tfuahi-593583287766.us-east1.run.app/api/attachments/665c8535-c5da-48c6-a440-a48c5f85f138/0" 
-            alt="OEG Logo" 
+            src="https://i.ibb.co/PvHCyFtf/logo.png" 
+            alt="SupplyFlow Logo" 
             className="w-10 h-10 rounded-xl object-cover shadow-sm"
             referrerPolicy="no-referrer"
           />
@@ -125,7 +140,7 @@ export default function Layout() {
             v1.0.1
           </div>
           <button 
-            onClick={handleLogout}
+            onClick={() => handleLogout().catch(err => console.error('Error in handleLogout:', err))}
             className="flex items-center gap-3 px-4 py-3 w-full text-blue-200/70 hover:text-[#FF4444] transition-colors"
           >
             <LogOut size={20} />
@@ -186,7 +201,7 @@ export default function Layout() {
                       <div 
                         key={n.id} 
                         className={cn("p-4 hover:bg-[#F5F5F5] transition-colors cursor-pointer", !n.read && "bg-blue-50/30")}
-                        onClick={() => markAsRead(n.id)}
+                        onClick={() => markAsRead(n.id).catch(err => console.error('Error in markAsRead:', err))}
                       >
                         <div className="flex items-start gap-3">
                           <div className="mt-1">{getNotificationIcon(n.type)}</div>
@@ -234,8 +249,8 @@ export default function Layout() {
             <div className="p-6 border-b border-[#002b56] flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img 
-                  src="https://ais-dev-3gcupuvg3itndz43tfuahi-593583287766.us-east1.run.app/api/attachments/665c8535-c5da-48c6-a440-a48c5f85f138/0" 
-                  alt="OEG Logo" 
+                  src="https://i.ibb.co/PvHCyFtf/logo.png" 
+                  alt="SupplyFlow Logo" 
                   className="w-8 h-8 rounded-lg object-cover"
                   referrerPolicy="no-referrer"
                 />
@@ -269,7 +284,7 @@ export default function Layout() {
                 v1.0.1
               </div>
               <button 
-                onClick={handleLogout}
+                onClick={() => handleLogout().catch(err => console.error('Error in handleLogout:', err))}
                 className="flex items-center gap-3 px-4 py-3 w-full text-blue-200/70 hover:text-[#FF4444] transition-colors"
               >
                 <LogOut size={20} />

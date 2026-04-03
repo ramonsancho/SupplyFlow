@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { Contract } from '../types';
+import { Contract, Supplier } from '../types';
 import ContractModal from './ContractModal';
 import ConfirmModal from './ConfirmModal';
+import { Tag as TagIcon } from 'lucide-react';
 
 export default function ContractList() {
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
@@ -28,27 +30,47 @@ export default function ContractList() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'contracts'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const qContracts = query(collection(db, 'contracts'), orderBy('createdAt', 'desc'));
+    const unsubscribeContracts = onSnapshot(qContracts, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Contract[];
       setContracts(data);
-      setIsLoading(false);
     }, (error) => {
       try {
         handleFirestoreError(error, OperationType.LIST, 'contracts');
       } catch (e) {
-        console.error('ContractList error:', e);
+        console.error('ContractList contracts error:', e);
+      }
+    });
+
+    const qSuppliers = query(collection(db, 'suppliers'));
+    const unsubscribeSuppliers = onSnapshot(qSuppliers, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Supplier[];
+      setSuppliers(data);
+      setIsLoading(false);
+    }, (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'suppliers');
+      } catch (e) {
+        console.error('ContractList suppliers error:', e);
       }
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeContracts();
+      unsubscribeSuppliers();
+    };
   }, []);
 
   const filteredContracts = contracts.filter(c => 
     c.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.notes?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getSupplierFamilies = (supplierId: string) => {
+    const supplier = suppliers.find(s => s.id === supplierId);
+    return supplier?.families || [];
+  };
 
   const handleAddContract = async (data: any) => {
     try {
@@ -168,7 +190,20 @@ export default function ContractList() {
                 <tr key={contract.id} className="hover:bg-[#F5F5F5]/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-[#141414]">{contract.supplierName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#141414]">{contract.supplierName}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {getSupplierFamilies(contract.supplierId).map((family) => (
+                            <span 
+                              key={family} 
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#F5F5F5] text-[#8E9299] rounded text-[8px] font-bold uppercase tracking-tighter"
+                            >
+                              <TagIcon size={8} />
+                              {family}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                       {contract.notes && (
                         <span className="text-[10px] text-[#8E9299] mt-0.5 line-clamp-1">{contract.notes}</span>
                       )}
@@ -234,14 +269,14 @@ export default function ContractList() {
           setIsModalOpen(false);
           setEditingContract(null);
         }}
-        onSubmit={handleAddContract}
+        onSubmit={(data) => handleAddContract(data).catch(err => console.error('Error in handleAddContract:', err))}
         initialData={editingContract || undefined}
       />
 
       <ConfirmModal
         isOpen={!!contractToDelete}
         onClose={() => setContractToDelete(null)}
-        onConfirm={() => contractToDelete && handleDeleteContract(contractToDelete.id)}
+        onConfirm={() => contractToDelete && handleDeleteContract(contractToDelete.id).catch(err => console.error('Error in handleDeleteContract:', err))}
         title="Excluir Contrato"
         message={`Tem certeza que deseja excluir o contrato do fornecedor ${contractToDelete?.supplierName}? Esta ação não poderá ser desfeita.`}
         confirmText="Excluir"

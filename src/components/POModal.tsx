@@ -2,11 +2,14 @@ import React from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { X, Save, Plus, Trash2, DollarSign } from 'lucide-react';
+import { X, Save, Plus, Trash2, DollarSign, Tag, AlertCircle } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../types';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 const poSchema = z.object({
   supplierId: z.string().min(1, 'Selecione um fornecedor'),
+  family: z.string().optional(),
   status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed']),
   items: z.array(z.object({
     description: z.string().min(3, 'Descrição obrigatória'),
@@ -28,14 +31,62 @@ interface POModalProps {
 }
 
 export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialData }: POModalProps) {
-  const { register, control, handleSubmit, formState: { errors }, watch } = useForm<POFormData>({
+  const [families, setFamilies] = React.useState<string[]>([]);
+  const [validationError, setValidationError] = React.useState<string | null>(null);
+
+  const { register, control, handleSubmit, formState: { errors }, watch, reset } = useForm<POFormData>({
     resolver: zodResolver(poSchema),
     defaultValues: {
       supplierId: initialData?.supplierId || '',
+      family: initialData?.family || '',
       status: initialData?.status || 'draft',
       items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
     }
   });
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setValidationError(null);
+      reset({
+        supplierId: initialData?.supplierId || '',
+        family: initialData?.family || '',
+        status: initialData?.status || 'draft',
+        items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
+      });
+    }
+  }, [isOpen, initialData, reset]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const q = query(collection(db, 'families'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
+      const defaultFamilies = ['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística'];
+      const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort();
+      setFamilies(allFamilies);
+    }, (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'families');
+      } catch (e) {
+        console.error('Families list error:', e);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isOpen]);
+
+  const onFormSubmit = (data: POFormData) => {
+    const selectedSupplier = suppliers.find(s => s.id === data.supplierId);
+    
+    if (data.family && selectedSupplier && !selectedSupplier.families.includes(data.family)) {
+      setValidationError(`O fornecedor ${selectedSupplier.name} não possui a família de fornecimento "${data.family}" cadastrada.`);
+      return;
+    }
+
+    setValidationError(null);
+    onSubmit(data);
+  };
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -62,10 +113,16 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-8 overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="p-8 space-y-8 overflow-y-auto">
+          {(Object.keys(errors).length > 0 || validationError) && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
+              <AlertCircle size={20} className="shrink-0" />
+              <p className="text-sm font-bold">{validationError || "Por favor, verifique os campos obrigatórios."}</p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Fornecedor</label>
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Fornecedor</label>
               <select 
                 {...register('supplierId')}
                 className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
@@ -79,15 +136,29 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Status Inicial</label>
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Família de Fornecimento</label>
+              <div className="relative">
+                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+                <select 
+                  {...register('family')}
+                  className="w-full pl-12 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all appearance-none"
+                >
+                  <option value="">Selecione uma família...</option>
+                  {families.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Status Inicial</label>
               <select 
                 {...register('status')}
                 className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
               >
                 <option value="draft">Rascunho</option>
                 <option value="pending_approval">Pendente de Aprovação</option>
-                <option value="approved">Aprovado</option>
-                <option value="sent">Enviado</option>
               </select>
             </div>
           </div>

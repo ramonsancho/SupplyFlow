@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { X, Save, Plus, Trash2 } from 'lucide-react';
+import { X, Save, Plus, Trash2, Tag } from 'lucide-react';
 import { RFQ } from '../types';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 const rfqSchema = z.object({
   title: z.string().min(5, 'Título deve ter pelo menos 5 caracteres'),
   desiredDate: z.string().min(1, 'Data desejada obrigatória'),
+  family: z.string().optional(),
   items: z.array(z.object({
     description: z.string().min(3, 'Descrição obrigatória'),
     quantity: z.number().min(1, 'Quantidade deve ser pelo menos 1'),
@@ -25,19 +28,67 @@ interface RFQModalProps {
 }
 
 export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQModalProps) {
-  const { register, control, handleSubmit, formState: { errors } } = useForm<RFQFormData>({
+  const [families, setFamilies] = useState<string[]>([]);
+  
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<RFQFormData>({
     resolver: zodResolver(rfqSchema),
     defaultValues: {
       title: initialData?.title || '',
       desiredDate: initialData?.desiredDate || '',
+      family: initialData?.family || '',
       items: initialData?.items || [{ description: '', quantity: 1, unit: 'un' }],
     }
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        title: initialData?.title || '',
+        desiredDate: initialData?.desiredDate || '',
+        family: initialData?.family || '',
+        items: initialData?.items || [{ description: '', quantity: 1, unit: 'un' }],
+      });
+    }
+  }, [isOpen, initialData, reset]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const q = query(collection(db, 'families'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
+      const defaultFamilies = ['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística'];
+      const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort();
+      setFamilies(allFamilies);
+    }, (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'families');
+      } catch (e) {
+        console.error('Families list error:', e);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isOpen]);
 
   const { fields, append, remove } = useFieldArray({
     control,
     name: "items"
   });
+
+  const onFormSubmit = (data: RFQFormData) => {
+    const itemsWithIds = data.items.map(item => ({
+      ...item,
+      id: crypto.randomUUID()
+    }));
+    onSubmit({ ...data, items: itemsWithIds });
+    reset({
+      title: '',
+      desiredDate: '',
+      family: '',
+      items: [{ description: '', quantity: 1, unit: 'un' }],
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -56,7 +107,7 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-8 overflow-y-auto">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="p-8 space-y-8 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Título da Cotação</label>
@@ -66,6 +117,22 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
                 placeholder="Ex: Aquisição de Material de Escritório - Q2"
               />
               {errors.title && <p className="text-xs text-red-500 font-medium">{errors.title.message}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Família de Fornecimento</label>
+              <div className="relative">
+                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+                <select 
+                  {...register('family')}
+                  className="w-full pl-12 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all appearance-none"
+                >
+                  <option value="">Selecione uma família...</option>
+                  {families.map(family => (
+                    <option key={family} value={family}>{family}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-2">

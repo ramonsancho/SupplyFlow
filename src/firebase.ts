@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApp, getApps } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -14,10 +14,12 @@ import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, o
 // Import the Firebase configuration
 import firebaseConfig from '../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
+
+export { initializeApp, getAuth, createUserWithEmailAndPassword, firebaseConfig };
 
 export enum OperationType {
   CREATE = 'create',

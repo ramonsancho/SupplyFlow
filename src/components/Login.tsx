@@ -93,7 +93,6 @@ export default function Login() {
 
   const handleFirstAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleFirstAccess started for:', email);
     
     if (password !== confirmPassword) {
       addNotification('Erro', 'As senhas não coincidem.', 'error');
@@ -123,17 +122,14 @@ export default function Login() {
       }
 
       // 2. Criar o usuário no Firebase Auth
-      console.log('Creating user in Firebase Auth...');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
-      console.log('User created in Auth with UID:', uid);
 
       // 3. Vincular o UID ao documento do Firestore
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
         
-        console.log('Updating existing user document:', userDoc.id);
         await setDoc(doc(db, 'users', uid), {
           ...userData,
           uid: uid,
@@ -146,7 +142,6 @@ export default function Login() {
         }
       } else {
         // Criar novo documento para o bootstrap
-        console.log('Creating new bootstrap admin document');
         await setDoc(doc(db, 'users', uid), {
           name: email.split('@')[0],
           email: email.toLowerCase().trim(),
@@ -196,14 +191,16 @@ export default function Login() {
       <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl border border-[#E5E5E5] overflow-hidden">
         <div className="p-10">
           <div className="flex flex-col items-center mb-10">
-            <img 
-              src="https://ais-dev-3gcupuvg3itndz43tfuahi-593583287766.us-east1.run.app/api/attachments/665c8535-c5da-48c6-a440-a48c5f85f138/0" 
-              alt="OEG Logo" 
-              className="w-20 h-20 rounded-3xl object-cover mb-6 shadow-xl"
-              referrerPolicy="no-referrer"
-            />
-            <h1 className="text-3xl font-bold text-[#141414] tracking-tight">SupplyFlow</h1>
-            <p className="text-[#8E9299] mt-2 font-medium uppercase tracking-[0.2em] text-[10px]">Gestão de Suprimentos</p>
+            <div className="flex items-center gap-3 mb-2">
+              <img 
+                src="https://i.ibb.co/PvHCyFtf/logo.png" 
+                alt="SupplyFlow Logo" 
+                className="w-12 h-12 rounded-2xl object-cover shadow-lg"
+                referrerPolicy="no-referrer"
+              />
+              <h1 className="text-3xl font-bold text-[#141414] tracking-tight">SupplyFlow</h1>
+            </div>
+            <p className="text-[#8E9299] font-medium uppercase tracking-[0.2em] text-[10px]">Gestão de Suprimentos</p>
           </div>
 
           <div className="flex bg-[#F5F5F5] p-1 rounded-2xl mb-8">
@@ -243,7 +240,7 @@ export default function Login() {
                 {!isFirstAccess && (
                   <button 
                     type="button"
-                    onClick={handleForgotPassword}
+                    onClick={() => handleForgotPassword().catch(err => console.error('Error in handleForgotPassword:', err))}
                     className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-widest"
                   >
                     Esqueceu?

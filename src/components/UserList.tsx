@@ -28,8 +28,11 @@ import {
   serverTimestamp,
   query,
   orderBy,
-  getDoc
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
+import { initializeApp, getAuth as getAuthSecondary, createUserWithEmailAndPassword, firebaseConfig } from '../firebase';
+import { deleteApp, getApps } from 'firebase/app';
 
 export default function UserList() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,10 +55,14 @@ export default function UserList() {
             setCurrentUserProfile({ ...userDoc.data(), id: userDoc.id } as User);
           }
         } catch (error) {
-          console.error('Failed to fetch profile:', error);
+          try {
+            handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
+          } catch (e) {
+            console.error('Failed to fetch profile:', e);
+          }
         }
       };
-      fetchProfile();
+      fetchProfile().catch(err => console.error('Error in fetchProfile:', err));
     }
 
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
@@ -79,6 +86,7 @@ export default function UserList() {
   }, []);
 
   const handleSaveUser = async (data: any) => {
+    let secondaryApp;
     try {
       if (editingUser) {
         const userRef = doc(db, 'users', editingUser.id);
@@ -86,23 +94,56 @@ export default function UserList() {
           ...data,
           updatedAt: serverTimestamp()
         });
-        addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
-        addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
+        await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
-        const docRef = await addDoc(collection(db, 'users'), {
+        // 1. Criar no Firebase Auth usando uma instância secundária para não deslogar o admin
+        const tempPassword = Math.random().toString(36).slice(-10);
+        const appName = `SecondaryApp-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        secondaryApp = initializeApp(firebaseConfig, appName);
+        const secondaryAuth = getAuthSecondary(secondaryApp);
+        
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPassword);
+        const uid = userCredential.user.uid;
+        
+        // 2. Salvar no Firestore usando o UID do Auth como ID do documento
+        await setDoc(doc(db, 'users', uid), {
           ...data,
           createdAt: serverTimestamp()
         });
-        addLog('Cadastrou Usuário', 'User', docRef.id, auth.currentUser?.email || 'Unknown');
-        addNotification('Usuário Cadastrado', `${data.name} foi adicionado com sucesso.`, 'success');
+        
+        // 3. Enviar email de redefinição de senha imediatamente
+        try {
+          await sendPasswordResetEmail(auth, data.email);
+        } catch (resetError) {
+          console.error('Error sending initial reset email:', resetError);
+        }
+        
+        await addLog('Cadastrou Usuário', 'User', uid, auth.currentUser?.email || 'Unknown');
+        await addNotification('Usuário Cadastrado', `${data.name} foi adicionado e um email de redefinição foi enviado.`, 'success');
       }
       setIsModalOpen(false);
       setEditingUser(undefined);
-    } catch (error) {
-      try {
-        handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
-      } catch (e) {
-        console.error('User save error:', e);
+    } catch (error: any) {
+      console.error('User save error:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        await addNotification('Erro', 'Este email já está em uso no sistema.', 'error');
+      } else {
+        try {
+          handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
+        } catch (e) {
+          await addNotification('Erro', 'Não foi possível salvar o usuário.', 'error');
+        }
+      }
+    } finally {
+      if (secondaryApp) {
+        try {
+          // Pequeno delay para garantir que as operações do Auth foram concluídas
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await deleteApp(secondaryApp);
+        } catch (deleteError) {
+          console.error('Error deleting secondary app:', deleteError);
+        }
       }
     }
   };
@@ -110,8 +151,8 @@ export default function UserList() {
   const handleDeleteUser = async (id: string, name: string) => {
     try {
       await deleteDoc(doc(db, 'users', id));
-      addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
-      addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
+      await addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
+      await addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
     } catch (error) {
       try {
         handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
@@ -124,10 +165,11 @@ export default function UserList() {
   const handleResetPassword = async (email: string) => {
     try {
       await sendPasswordResetEmail(auth, email);
-      addLog('Resetou Senha', 'User', email, auth.currentUser?.email || 'Unknown');
-      addNotification('Email Enviado', `Instruções de redefinição enviadas para ${email}.`, 'success');
+      await addLog('Resetou Senha', 'User', email, auth.currentUser?.email || 'Unknown');
+      await addNotification('Email Enviado', `Instruções de redefinição enviadas para ${email}.`, 'success');
     } catch (error) {
-      addNotification('Erro', 'Não foi possível enviar o email de redefinição.', 'error');
+      console.error('Error resetting password:', error);
+      await addNotification('Erro', 'Não foi possível enviar o email de redefinição.', 'error');
     }
   };
 
@@ -158,14 +200,14 @@ export default function UserList() {
           setIsModalOpen(false);
           setEditingUser(undefined);
         }} 
-        onSubmit={handleSaveUser}
+        onSubmit={(data) => handleSaveUser(data).catch(err => console.error('Error in handleSaveUser:', err))}
         initialData={editingUser}
       />
 
       <ConfirmModal
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
-        onConfirm={() => userToDelete && handleDeleteUser(userToDelete.id, userToDelete.name)}
+        onConfirm={() => userToDelete && handleDeleteUser(userToDelete.id, userToDelete.name).catch(err => console.error('Error in handleDeleteUser:', err))}
         title="Excluir Usuário"
         message={`Tem certeza que deseja excluir o usuário ${userToDelete?.name}? Esta ação não poderá ser desfeita.`}
         confirmText="Excluir"
@@ -175,7 +217,7 @@ export default function UserList() {
       <ConfirmModal
         isOpen={!!resetPasswordEmail}
         onClose={() => setResetPasswordEmail(null)}
-        onConfirm={() => resetPasswordEmail && handleResetPassword(resetPasswordEmail)}
+        onConfirm={() => resetPasswordEmail && handleResetPassword(resetPasswordEmail).catch(err => console.error('Error in handleResetPassword:', err))}
         title="Resetar Senha"
         message={`Deseja enviar um email de redefinição de senha para ${resetPasswordEmail}?`}
         confirmText="Enviar Email"

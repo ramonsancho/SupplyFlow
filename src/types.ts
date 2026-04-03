@@ -18,6 +18,7 @@ export type RFQ = {
   id: string;
   number: number;
   title: string;
+  family?: string;
   status: 'draft' | 'sent' | 'closed';
   desiredDate: string;
   items: RFQItem[];
@@ -35,10 +36,20 @@ export type Proposal = {
   id: string;
   rfqId: string;
   supplierId: string;
+  supplierName: string;
   totalValue: number;
   deliveryDate: string;
   status: 'pending' | 'accepted' | 'rejected';
+  items: ProposalItem[];
   createdAt: string;
+};
+
+export type ProposalItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
 };
 
 export type PurchaseOrder = {
@@ -47,13 +58,17 @@ export type PurchaseOrder = {
   proposalId?: string;
   supplierId: string;
   supplierName: string;
+  family?: string;
   status: 'draft' | 'pending_approval' | 'approved' | 'sent' | 'received' | 'closed';
   totalAmount: number;
   originalAmount?: number; // Pre-negotiation or reference amount for savings calculation
   receivedAmount: number;
   items: POItem[];
   createdAt: string;
+  createdBy?: string;
+  createdByName?: string;
   approvedBy?: string;
+  approvedByName?: string;
   approvedAt?: string;
   rating?: number;
   completedAt?: string;

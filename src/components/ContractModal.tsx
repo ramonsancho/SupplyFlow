@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { X, Save } from 'lucide-react';
+import { X, Save, Tag } from 'lucide-react';
 import { Contract, Supplier } from '../types';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -55,15 +55,15 @@ export default function ContractModal({ isOpen, onClose, onSubmit, initialData }
   }, []);
 
   const selectedSupplierId = watch('supplierId');
+  const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
 
   useEffect(() => {
     if (selectedSupplierId) {
-      const supplier = suppliers.find(s => s.id === selectedSupplierId);
-      if (supplier) {
-        setValue('supplierName', supplier.name);
+      if (selectedSupplier) {
+        setValue('supplierName', selectedSupplier.name);
       }
     }
-  }, [selectedSupplierId, suppliers, setValue]);
+  }, [selectedSupplierId, selectedSupplier, setValue]);
 
   if (!isOpen) return null;
 
@@ -82,7 +82,22 @@ export default function ContractModal({ isOpen, onClose, onSubmit, initialData }
         <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Fornecedor</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Fornecedor</label>
+                {selectedSupplier && (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedSupplier.families.map((family) => (
+                      <span 
+                        key={family} 
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#F5F5F5] text-[#8E9299] rounded text-[8px] font-bold uppercase tracking-tighter"
+                      >
+                        <Tag size={8} />
+                        {family}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <select
                 {...register('supplierId')}
                 className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl text-sm focus:ring-2 focus:ring-[#141414] transition-all"
