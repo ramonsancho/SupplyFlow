@@ -6,7 +6,9 @@ import {
   AlertCircle, 
   CheckCircle2, 
   ArrowRight,
-  UserPlus
+  UserPlus,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { 
   auth, 
@@ -26,7 +28,8 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  getDoc
+  getDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 
@@ -36,6 +39,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { addNotification } = useNotifications();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -106,8 +111,13 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      // 1. Verificar se o email está cadastrado na coleção 'users'
-      // Fazemos isso ANTES de criar no Auth para evitar criar usuários órfãos
+      // 1. Criar o usuário no Firebase Auth primeiro para estarmos autenticados
+      // Isso permite que as regras do Firestore funcionem (allow read: if isAuthenticated())
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      const uid = user.uid;
+
+      // 2. Agora autenticados, verificar se o email está cadastrado na coleção 'users'
       const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
       const querySnapshot = await getDocs(q);
 
@@ -116,24 +126,30 @@ export default function Login() {
       const isBootstrap = bootstrapEmails.includes(email.toLowerCase().trim());
 
       if (querySnapshot.empty && !isBootstrap) {
+        // Se não autorizado, deletamos o usuário do Auth e deslogamos
+        await user.delete();
+        await signOut(auth);
         addNotification('Acesso Negado', 'Este email não está autorizado no sistema. Entre em contato com o administrador.', 'error');
         setIsLoading(false);
         return;
       }
-
-      // 2. Criar o usuário no Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
 
       // 3. Vincular o UID ao documento do Firestore
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
         
+        // Garantir que createdAt seja um Timestamp se for string
+        let createdAt = userData.createdAt;
+        if (typeof createdAt === 'string') {
+          createdAt = new Date(createdAt);
+        }
+        
         await setDoc(doc(db, 'users', uid), {
           ...userData,
           uid: uid,
-          updatedAt: new Date().toISOString()
+          createdAt: createdAt || serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
 
         // Deletar o documento antigo (que tinha ID aleatório ou temporário)
@@ -149,8 +165,8 @@ export default function Login() {
           status: 'Ativo',
           uid: uid,
           approvalLimit: 10000000,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       }
 
@@ -250,13 +266,20 @@ export default function Login() {
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-12 pr-4 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
+                  className="w-full pl-12 pr-12 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#141414] transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -266,13 +289,20 @@ export default function Login() {
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
                   <input 
-                    type="password" 
+                    type={showConfirmPassword ? "text" : "password"} 
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-12 pr-4 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
+                    className="w-full pl-12 pr-12 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#141414] transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
             )}

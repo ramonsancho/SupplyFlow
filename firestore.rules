@@ -109,8 +109,8 @@ service cloud.firestore {
       return canAccess() && 
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador') ||
-         (request.auth.token.email.lower() == "ramon.souza@oeg.group" && request.auth.token.email_verified == true) ||
-         (request.auth.token.email.lower() == "ramonsancho@gmail.com" && request.auth.token.email_verified == true));
+         (request.auth.token.email != null && request.auth.token.email.lower() == "ramon.souza@oeg.group") ||
+         (request.auth.token.email != null && request.auth.token.email.lower() == "ramonsancho@gmail.com"));
     }
 
     function hasRequiredFields(fields) {
@@ -229,9 +229,9 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if canAccess();
-      allow create: if ((canAccess() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email) || isAdmin()) && isValidUser(request.resource.data);
-      allow update: if ((canAccess() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && request.resource.data.role == resource.data.role) || isAdmin()) && isValidUser(request.resource.data);
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && (isAdmin() || (request.auth.uid == userId && request.resource.data.email == request.auth.token.email))) && isValidUser(request.resource.data);
+      allow update: if (isAuthenticated() && (isAdmin() || (request.auth.uid == userId && request.resource.data.email == request.auth.token.email && request.resource.data.role == resource.data.role))) && isValidUser(request.resource.data);
       allow delete: if isAdmin();
     }
 
