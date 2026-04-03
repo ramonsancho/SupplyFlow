@@ -18,7 +18,9 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signOut
+  signOut,
+  signInWithPopup,
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { 
   collection, 
@@ -32,6 +34,8 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
+
+const googleProvider = new GoogleAuthProvider();
 
 export default function Login() {
   const [isFirstAccess, setIsFirstAccess] = useState(false);
@@ -87,10 +91,80 @@ export default function Login() {
       addNotification('Bem-vindo!', 'Login realizado com sucesso.', 'success');
     } catch (error: any) {
       let message = 'Erro ao realizar login. Verifique suas credenciais.';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      if (error.code === 'auth/operation-not-allowed') {
+        message = 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.';
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         message = 'Email ou senha incorretos.';
       }
       addNotification('Erro de Login', message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const email = user.email?.toLowerCase().trim() || '';
+
+      // Verificar status do usuário no Firestore
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.status === 'Inativo') {
+          await signOut(auth);
+          addNotification('Acesso Negado', 'Sua conta está inativa.', 'error');
+          setIsLoading(false);
+          return;
+        }
+      } else {
+        // Verificar se ele está autorizado por email
+        const q = query(collection(db, 'users'), where('email', '==', email));
+        const querySnapshot = await getDocs(q);
+        
+        const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
+        const isBootstrap = bootstrapEmails.includes(email);
+
+        if (querySnapshot.empty && !isBootstrap) {
+          await signOut(auth);
+          addNotification('Acesso Negado', 'Este email não está autorizado no sistema.', 'error');
+          setIsLoading(false);
+          return;
+        }
+
+        // Vincular UID ao documento existente ou criar novo para bootstrap
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          const userData = userDoc.data();
+          await setDoc(doc(db, 'users', user.uid), {
+            ...userData,
+            uid: user.uid,
+            updatedAt: serverTimestamp()
+          });
+          if (userDoc.id !== user.uid) {
+            await deleteDoc(doc(db, 'users', userDoc.id));
+          }
+        } else {
+          await setDoc(doc(db, 'users', user.uid), {
+            name: user.displayName || email.split('@')[0],
+            email: email,
+            role: 'Administrador',
+            status: 'Ativo',
+            uid: user.uid,
+            approvalLimit: 10000000,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+      addNotification('Bem-vindo!', 'Login realizado com sucesso.', 'success');
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      addNotification('Erro', 'Não foi possível realizar login com Google.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -176,7 +250,9 @@ export default function Login() {
       let message = 'Erro ao configurar primeiro acesso.';
       
       // Se for erro de permissão, dar uma dica mais clara
-      if (error.message && error.message.includes('insufficient permissions')) {
+      if (error.code === 'auth/operation-not-allowed') {
+        message = 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.';
+      } else if (error.message && error.message.includes('insufficient permissions')) {
         message = 'Erro de permissão no banco de dados. Verifique se seu email está autorizado.';
       } else if (error.code === 'auth/email-already-in-use') {
         message = 'Este usuário já possui uma senha configurada. Tente fazer login.';
@@ -328,6 +404,25 @@ export default function Login() {
                   <ArrowRight size={20} />
                 </>
               )}
+            </button>
+
+            <div className="relative my-8">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#E5E5E5]"></div>
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                <span className="bg-white px-4 text-[#8E9299]">Ou continue com</span>
+              </div>
+            </div>
+
+            <button 
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="w-full bg-white text-[#141414] py-4 rounded-2xl font-bold border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+              <span>Entrar com Google</span>
             </button>
           </form>
 

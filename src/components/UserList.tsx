@@ -126,7 +126,9 @@ export default function UserList() {
       setEditingUser(undefined);
     } catch (error: any) {
       console.error('User save error:', error);
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.code === 'auth/operation-not-allowed') {
+        await addNotification('Erro de Configuração', 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.', 'error');
+      } else if (error.code === 'auth/email-already-in-use') {
         await addNotification('Erro', 'Este email já está em uso no sistema.', 'error');
       } else {
         try {
