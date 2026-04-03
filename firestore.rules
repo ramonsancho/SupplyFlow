@@ -97,8 +97,9 @@ service cloud.firestore {
     }
 
     function isActive() {
-      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo';
+      return isAuthenticated() && 
+        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo');
     }
 
     function canAccess() {
@@ -106,11 +107,13 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return canAccess() && 
-        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador') ||
-         (request.auth.token.email != null && request.auth.token.email.lower() == "ramon.souza@oeg.group") ||
-         (request.auth.token.email != null && request.auth.token.email.lower() == "ramonsancho@gmail.com"));
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador' &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo') ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == "ramon.souza@oeg.group") ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == "ramonsancho@gmail.com")
+      );
     }
 
     function hasRequiredFields(fields) {

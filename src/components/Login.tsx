@@ -174,7 +174,11 @@ export default function Login() {
     } catch (error: any) {
       console.error('First access error details:', error);
       let message = 'Erro ao configurar primeiro acesso.';
-      if (error.code === 'auth/email-already-in-use') {
+      
+      // Se for erro de permissão, dar uma dica mais clara
+      if (error.message && error.message.includes('insufficient permissions')) {
+        message = 'Erro de permissão no banco de dados. Verifique se seu email está autorizado.';
+      } else if (error.code === 'auth/email-already-in-use') {
         message = 'Este usuário já possui uma senha configurada. Tente fazer login.';
       } else if (error.code === 'auth/weak-password') {
         message = 'A senha deve ter pelo menos 6 caracteres.';
@@ -271,14 +275,16 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-12 pr-12 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
+                  className="w-full pl-12 pr-14 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#141414] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-black/5 text-[#8E9299] hover:text-[#141414] transition-all"
+                  title={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  <span className="text-[9px] font-bold uppercase">{showPassword ? 'Ocultar' : 'Ver'}</span>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
@@ -294,14 +300,16 @@ export default function Login() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-12 pr-12 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
+                    className="w-full pl-12 pr-14 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8E9299] hover:text-[#141414] transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-black/5 text-[#8E9299] hover:text-[#141414] transition-all"
+                    title={showConfirmPassword ? "Ocultar senha" : "Mostrar senha"}
                   >
-                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    <span className="text-[9px] font-bold uppercase">{showConfirmPassword ? 'Ocultar' : 'Ver'}</span>
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
