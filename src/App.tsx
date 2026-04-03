@@ -24,50 +24,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const seedAdmin = async () => {
-      try {
-        const q = query(collection(db, 'users'));
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-          // Criar o primeiro administrador se a coleção estiver vazia
-          await setDoc(doc(db, 'users', 'initial-admin-1'), {
-            name: 'Ramon Souza',
-            email: 'ramon.souza@oeg.group',
-            role: 'Administrador',
-            status: 'Ativo',
-            approvalLimit: 10000000,
-            createdAt: serverTimestamp()
-          });
-          await setDoc(doc(db, 'users', 'initial-admin-2'), {
-            name: 'Ramon Sancho',
-            email: 'ramonsancho@gmail.com',
-            role: 'Administrador',
-            status: 'Ativo',
-            approvalLimit: 10000000,
-            createdAt: serverTimestamp()
-          });
-        } else {
-          // Migração: Atualizar o usuário se ele ainda estiver com os dados antigos ou precisar de atualização de limite
-          for (const userDoc of snapshot.docs) {
-            const data = userDoc.data();
-            const email = data.email?.toLowerCase();
-            if (email === 'ramonsancho@gmail.com' || email === 'ramon.souza@oeg.group') {
-              await setDoc(doc(db, 'users', userDoc.id), {
-                ...data,
-                name: 'Ramon Souza',
-                email: 'ramon.souza@oeg.group',
-                approvalLimit: 10000000,
-                updatedAt: serverTimestamp()
-              }, { merge: true });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error seeding admin:', error);
-      }
-    };
-    seedAdmin().catch(e => console.error('Seed admin error:', e));
-
     const timeout = setTimeout(() => {
       setLoading(false);
     }, 5000);
@@ -99,31 +55,6 @@ export default function App() {
           }, (error) => {
             console.error('onSnapshot error:', error);
           });
-
-          // Se o usuário logado for o admin, garantir que o UID dele esteja vinculado ao documento de admin
-          const email = user.email?.toLowerCase();
-          if (email === 'ramonsancho@gmail.com' || email === 'ramon.souza@oeg.group') {
-            try {
-              const userSnap = await getDoc(userRef);
-              
-              if (!userSnap.exists()) {
-                const adminRef = doc(db, 'users', 'initial-admin');
-                const adminSnap = await getDoc(adminRef);
-                
-                if (adminSnap.exists()) {
-                  const adminData = adminSnap.data();
-                  await setDoc(userRef, {
-                    ...adminData,
-                    uid: user.uid,
-                    updatedAt: serverTimestamp()
-                  });
-                  await deleteDoc(adminRef);
-                }
-              }
-            } catch (error) {
-              console.error('Migration error:', error);
-            }
-          }
         }
         setLoading(false);
       } catch (error) {

@@ -279,7 +279,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleAddFamily();
+                          handleAddFamily().catch(err => console.error('Error in handleAddFamily:', err));
                         }
                         if (e.key === 'Escape') setIsAddingFamily(false);
                       }}
@@ -288,7 +288,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
                     />
                     <button
                       type="button"
-                      onClick={handleAddFamily}
+                      onClick={() => handleAddFamily().catch(err => console.error('Error in handleAddFamily:', err))}
                       className="p-2 bg-[#141414] text-white rounded-full hover:bg-black transition-all"
                     >
                       <Plus size={14} />

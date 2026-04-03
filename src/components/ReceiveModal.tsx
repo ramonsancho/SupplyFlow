@@ -2,7 +2,7 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { X, Save, Package, DollarSign } from 'lucide-react';
+import { X, Save, Package, DollarSign, AlertCircle } from 'lucide-react';
 import { PurchaseOrder } from '../types';
 
 const receiveSchema = z.object({
@@ -19,6 +19,7 @@ interface ReceiveModalProps {
 }
 
 export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveModalProps) {
+  const [validationError, setValidationError] = React.useState<string | null>(null);
   const remaining = po ? po.totalAmount - po.receivedAmount : 0;
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<ReceiveFormData>({
@@ -30,6 +31,7 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
 
   React.useEffect(() => {
     if (isOpen && po) {
+      setValidationError(null);
       reset({ amount: po.totalAmount - po.receivedAmount });
     }
   }, [isOpen, po, reset]);
@@ -38,9 +40,10 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
 
   const onFormSubmit = (data: ReceiveFormData) => {
     if (data.amount > remaining + 0.01) { // Small tolerance for float issues
-      alert(`O valor recebido (R$ ${data.amount.toLocaleString()}) não pode ser maior que o saldo pendente (R$ ${remaining.toLocaleString()}).`);
+      setValidationError(`O valor recebido (R$ ${data.amount.toLocaleString()}) não pode ser maior que o saldo pendente (R$ ${remaining.toLocaleString()}).`);
       return;
     }
+    setValidationError(null);
     onSubmit(data.amount);
   };
 
@@ -58,6 +61,13 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
         </div>
 
         <form onSubmit={handleSubmit(onFormSubmit)} className="p-8 space-y-6">
+          {validationError && (
+            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-shake">
+              <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />
+              <p className="text-xs text-red-700 font-medium leading-relaxed">{validationError}</p>
+            </div>
+          )}
+
           <div className="bg-[#F5F5F5] p-4 rounded-2xl space-y-2">
             <div className="flex justify-between text-xs font-bold text-[#8E9299] uppercase tracking-widest">
               <span>Total da OC</span>
