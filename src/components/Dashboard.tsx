@@ -15,6 +15,12 @@ import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRigh
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { PurchaseOrder, RFQ, Supplier, Proposal } from '../types';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 const COLORS = ['#141414', '#8E9299', '#E5E5E5', '#F5F5F5'];
 
@@ -129,6 +135,20 @@ export default function Dashboard() {
   const avgLeadTimeDays = receivedPOs.length > 0 
     ? (totalLeadTime / receivedPOs.length / (1000 * 60 * 60 * 24)).toFixed(1) 
     : '0';
+
+  // Calculate Overall Accuracy (Average of all suppliers' accuracy)
+  const suppliersWithAccuracy = suppliers.filter(s => s.accuracy !== undefined);
+  const overallAccuracy = suppliersWithAccuracy.length > 0
+    ? (suppliersWithAccuracy.reduce((acc, s) => acc + (s.accuracy || 0), 0) / suppliersWithAccuracy.length).toFixed(1)
+    : '0';
+
+  const getAccuracyLabel = (acc: string) => {
+    const val = parseFloat(acc);
+    if (val >= 90) return 'Excelente';
+    if (val >= 75) return 'Bom';
+    if (val >= 50) return 'Regular';
+    return 'Crítico';
+  };
 
   // Top Suppliers Ranking
   const supplierSpend: Record<string, { name: string, total: number }> = {};
@@ -291,10 +311,15 @@ export default function Dashboard() {
             <div className="p-2 bg-[#F5F5F5] rounded-lg">
               <CheckCircle2 className="text-[#141414]" size={20} />
             </div>
-            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">98%</span>
+            <span className={cn(
+              "text-[10px] font-bold px-2 py-1 rounded-full",
+              parseFloat(overallAccuracy) >= 75 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+            )}>
+              {overallAccuracy}%
+            </span>
           </div>
           <h3 className="text-[#8E9299] text-xs font-bold uppercase tracking-widest mt-4">Acuracidade</h3>
-          <p className="text-2xl font-bold text-[#141414] mt-1">Excelente</p>
+          <p className="text-2xl font-bold text-[#141414] mt-1">{getAccuracyLabel(overallAccuracy)}</p>
         </div>
       </div>
 
@@ -315,7 +340,8 @@ export default function Dashboard() {
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#8E9299', fontSize: 12 }} 
+                  tick={{ fill: '#8E9299', fontSize: 10 }} 
+                  interval={0}
                 />
                 <YAxis 
                   axisLine={false} 
@@ -354,7 +380,8 @@ export default function Dashboard() {
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#8E9299', fontSize: 12 }} 
+                  tick={{ fill: '#8E9299', fontSize: 10 }} 
+                  interval={0}
                 />
                 <YAxis 
                   axisLine={false} 

@@ -22,7 +22,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { User as UserType } from '../types';
 
 function cn(...inputs: ClassValue[]) {
@@ -41,9 +41,37 @@ export default function Layout() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userRef = doc(db, 'users', user.uid);
-        const unsubscribeProfile = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            setUserProfile({ ...doc.data(), id: doc.id } as UserType);
+        const unsubscribeProfile = onSnapshot(userRef, async (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
+            const userEmail = user.email?.toLowerCase().trim() || '';
+            
+            // Self-healing for bootstrap admins
+            if (bootstrapEmails.includes(userEmail)) {
+              let needsUpdate = false;
+              const updates: any = {};
+              
+              if (userData.role !== 'Administrador') {
+                updates.role = 'Administrador';
+                needsUpdate = true;
+              }
+              
+              if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+                updates.name = "Ramon Souza";
+                needsUpdate = true;
+              }
+              
+              if (needsUpdate) {
+                try {
+                  await setDoc(userRef, updates, { merge: true });
+                } catch (e) {
+                  console.error('Error self-healing bootstrap admin:', e);
+                }
+              }
+            }
+            
+            setUserProfile({ ...userData, id: docSnap.id } as UserType);
           }
         }, (error) => {
           try {

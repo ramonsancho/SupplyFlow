@@ -9,6 +9,7 @@ export type Supplier = {
   families: string[];
   paymentTerms: string;
   rating: number;
+  accuracy: number;
   isCritical: boolean;
   notes: string;
   createdAt: string;
@@ -71,6 +72,7 @@ export type PurchaseOrder = {
   approvedByName?: string;
   approvedAt?: string;
   rating?: number;
+  hasRNC?: boolean;
   completedAt?: string;
   receivedAt?: string;
 };

@@ -296,7 +296,19 @@ export default function SupplierList() {
               </div>
 
               <h3 className="text-lg font-bold text-[#141414] mb-1">{supplier.name}</h3>
-              <p className="text-xs text-[#8E9299] font-medium mb-4">{supplier.document}</p>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs text-[#8E9299] font-medium">{supplier.document}</p>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold text-[#8E9299] uppercase tracking-tighter">Acuracidade</p>
+                  <p className={cn(
+                    "text-xs font-bold",
+                    (supplier.accuracy || 0) >= 90 ? "text-green-600" : 
+                    (supplier.accuracy || 0) >= 70 ? "text-yellow-600" : "text-red-600"
+                  )}>
+                    {supplier.accuracy !== undefined ? `${supplier.accuracy}%` : 'N/A'}
+                  </p>
+                </div>
+              </div>
 
               <div className="space-y-3 mb-6">
                 <div className="flex items-center gap-3 text-sm text-[#8E9299]">

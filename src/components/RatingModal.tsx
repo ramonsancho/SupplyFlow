@@ -10,13 +10,14 @@ function cn(...inputs: ClassValue[]) {
 interface RatingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (rating: number) => void;
+  onSubmit: (rating: number, hasRNC: boolean) => void;
   poNumber: number;
   supplierName: string;
 }
 
 export default function RatingModal({ isOpen, onClose, onSubmit, poNumber, supplierName }: RatingModalProps) {
   const [rating, setRating] = useState<number | null>(null);
+  const [hasRNC, setHasRNC] = useState<boolean | null>(null);
 
   if (!isOpen) return null;
 
@@ -63,6 +64,38 @@ export default function RatingModal({ isOpen, onClose, onSubmit, poNumber, suppl
               </div>
             </div>
 
+            <div className="bg-[#F5F5F5] p-6 rounded-2xl space-y-4">
+              <p className="text-sm text-[#141414] font-bold text-center">
+                A ordem foi entregue com RNC?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setHasRNC(true)}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold text-xs transition-all border-2",
+                    hasRNC === true
+                      ? "bg-red-600 text-white border-red-600 shadow-md"
+                      : "bg-white text-red-600 border-red-100 hover:border-red-600"
+                  )}
+                >
+                  SIM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHasRNC(false)}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold text-xs transition-all border-2",
+                    hasRNC === false
+                      ? "bg-green-600 text-white border-green-600 shadow-md"
+                      : "bg-white text-green-600 border-green-100 hover:border-green-600"
+                  )}
+                >
+                  NÃO
+                </button>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={onClose}
@@ -71,8 +104,8 @@ export default function RatingModal({ isOpen, onClose, onSubmit, poNumber, suppl
                 Cancelar
               </button>
               <button
-                disabled={rating === null}
-                onClick={() => rating !== null && onSubmit(rating)}
+                disabled={rating === null || hasRNC === null}
+                onClick={() => rating !== null && hasRNC !== null && onSubmit(rating, hasRNC)}
                 className="flex-1 bg-[#141414] text-white py-4 rounded-2xl font-bold shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Concluir e Avaliar

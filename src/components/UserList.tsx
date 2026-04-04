@@ -47,26 +47,53 @@ export default function UserList() {
   const { addLog } = useAuditLog();
 
   useEffect(() => {
+    let unsubscribeProfile: (() => void) | null = null;
+
     if (auth.currentUser) {
-      const fetchProfile = async () => {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-          if (userDoc.exists()) {
-            setCurrentUserProfile({ ...userDoc.data(), id: userDoc.id } as User);
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      unsubscribeProfile = onSnapshot(userRef, async (docSnap) => {
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
+          const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+          
+          // Self-healing for bootstrap admins
+          if (bootstrapEmails.includes(userEmail)) {
+            let needsUpdate = false;
+            const updates: any = {};
+            
+            if (userData.role !== 'Administrador') {
+              updates.role = 'Administrador';
+              needsUpdate = true;
+            }
+            
+            if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+              updates.name = "Ramon Souza";
+              needsUpdate = true;
+            }
+            
+            if (needsUpdate) {
+              try {
+                await setDoc(userRef, updates, { merge: true });
+              } catch (e) {
+                console.error('Error self-healing bootstrap admin in UserList:', e);
+              }
+            }
           }
-        } catch (error) {
-          try {
-            handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
-          } catch (e) {
-            console.error('Failed to fetch profile:', e);
-          }
+          
+          setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
         }
-      };
-      fetchProfile().catch(err => console.error('Error in fetchProfile:', err));
+      }, (error) => {
+        try {
+          handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
+        } catch (e) {
+          console.error('Failed to fetch profile in UserList:', e);
+        }
+      });
     }
 
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeUsers = onSnapshot(q, (snapshot) => {
       const userData = snapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id,
@@ -82,7 +109,10 @@ export default function UserList() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribeUsers();
+    };
   }, []);
 
   const handleSaveUser = async (data: any) => {
@@ -187,13 +217,15 @@ export default function UserList() {
           <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Usuários</h2>
           <p className="text-[#8E9299] mt-1">Gerencie os acessos e permissões do sistema.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
-        >
-          <Plus size={20} />
-          <span>Novo Usuário</span>
-        </button>
+        {currentUserProfile?.role === 'Administrador' && (
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+          >
+            <Plus size={20} />
+            <span>Novo Usuário</span>
+          </button>
+        )}
       </div>
 
       <UserModal 
@@ -298,30 +330,34 @@ export default function UserList() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => setResetPasswordEmail(user.email)}
-                        className="p-2 text-[#8E9299] hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
-                        title="Resetar Senha"
-                      >
-                        <Key size={18} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setEditingUser(user);
-                          setIsModalOpen(true);
-                        }}
-                        className="p-2 text-[#8E9299] hover:text-[#141414] hover:bg-[#F5F5F5] rounded-full transition-all"
-                        title="Editar"
-                      >
-                        <Edit size={18} />
-                      </button>
-                      <button 
-                        onClick={() => setUserToDelete({ id: user.id, name: user.name })}
-                        className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
-                        title="Excluir"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      {currentUserProfile?.role === 'Administrador' && (
+                        <>
+                          <button 
+                            onClick={() => setResetPasswordEmail(user.email)}
+                            className="p-2 text-[#8E9299] hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
+                            title="Resetar Senha"
+                          >
+                            <Key size={18} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setEditingUser(user);
+                              setIsModalOpen(true);
+                            }}
+                            className="p-2 text-[#8E9299] hover:text-[#141414] hover:bg-[#F5F5F5] rounded-full transition-all"
+                            title="Editar"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <button 
+                            onClick={() => setUserToDelete({ id: user.id, name: user.name })}
+                            className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
+                            title="Excluir"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

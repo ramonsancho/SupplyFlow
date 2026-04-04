@@ -18,9 +18,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signOut,
-  signInWithPopup,
-  GoogleAuthProvider
+  signOut
 } from 'firebase/auth';
 import { 
   collection, 
@@ -34,8 +32,6 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
-
-const googleProvider = new GoogleAuthProvider();
 
 export default function Login() {
   const [isFirstAccess, setIsFirstAccess] = useState(false);
@@ -60,6 +56,13 @@ export default function Login() {
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
+        
+        // Garantir que administradores bootstrap tenham o papel correto
+        const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
+        if (bootstrapEmails.includes(user.email?.toLowerCase().trim() || '') && userData.role !== 'Administrador') {
+          await setDoc(userRef, { ...userData, role: 'Administrador' }, { merge: true });
+        }
+
         if (userData.status === 'Inativo') {
           await signOut(auth);
           addNotification('Acesso Negado', 'Sua conta está inativa. Entre em contato com o administrador.', 'error');
@@ -80,6 +83,19 @@ export default function Login() {
         }
 
         const authData = querySnapshot.docs[0].data();
+        
+        // Vincular o UID ao documento do Firestore se ainda não estiver
+        await setDoc(doc(db, 'users', user.uid), {
+          ...authData,
+          uid: user.uid,
+          updatedAt: serverTimestamp()
+        });
+
+        // Deletar o documento antigo se o ID for diferente do UID
+        if (querySnapshot.docs[0].id !== user.uid) {
+          await deleteDoc(doc(db, 'users', querySnapshot.docs[0].id));
+        }
+
         if (authData.status === 'Inativo') {
           await signOut(auth);
           addNotification('Acesso Negado', 'Sua conta está inativa.', 'error');
@@ -97,74 +113,6 @@ export default function Login() {
         message = 'Email ou senha incorretos.';
       }
       addNotification('Erro de Login', message, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const email = user.email?.toLowerCase().trim() || '';
-
-      // Verificar status do usuário no Firestore
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        if (userData.status === 'Inativo') {
-          await signOut(auth);
-          addNotification('Acesso Negado', 'Sua conta está inativa.', 'error');
-          setIsLoading(false);
-          return;
-        }
-      } else {
-        // Verificar se ele está autorizado por email
-        const q = query(collection(db, 'users'), where('email', '==', email));
-        const querySnapshot = await getDocs(q);
-        
-        const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
-        const isBootstrap = bootstrapEmails.includes(email);
-
-        if (querySnapshot.empty && !isBootstrap) {
-          await signOut(auth);
-          addNotification('Acesso Negado', 'Este email não está autorizado no sistema.', 'error');
-          setIsLoading(false);
-          return;
-        }
-
-        // Vincular UID ao documento existente ou criar novo para bootstrap
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0];
-          const userData = userDoc.data();
-          await setDoc(doc(db, 'users', user.uid), {
-            ...userData,
-            uid: user.uid,
-            updatedAt: serverTimestamp()
-          });
-          if (userDoc.id !== user.uid) {
-            await deleteDoc(doc(db, 'users', userDoc.id));
-          }
-        } else {
-          await setDoc(doc(db, 'users', user.uid), {
-            name: user.displayName || email.split('@')[0],
-            email: email,
-            role: 'Administrador',
-            status: 'Ativo',
-            uid: user.uid,
-            approvalLimit: 10000000,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
-      addNotification('Bem-vindo!', 'Login realizado com sucesso.', 'success');
-    } catch (error: any) {
-      console.error('Google login error:', error);
-      addNotification('Erro', 'Não foi possível realizar login com Google.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -232,8 +180,9 @@ export default function Login() {
         }
       } else {
         // Criar novo documento para o bootstrap
+        const isRamon = email.toLowerCase().trim() === "ramon.souza@oeg.group";
         await setDoc(doc(db, 'users', uid), {
-          name: email.split('@')[0],
+          name: isRamon ? "Ramon Souza" : email.split('@')[0],
           email: email.toLowerCase().trim(),
           role: 'Administrador',
           status: 'Ativo',
@@ -404,25 +353,6 @@ export default function Login() {
                   <ArrowRight size={20} />
                 </>
               )}
-            </button>
-
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#E5E5E5]"></div>
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
-                <span className="bg-white px-4 text-[#8E9299]">Ou continue com</span>
-              </div>
-            </div>
-
-            <button 
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="w-full bg-white text-[#141414] py-4 rounded-2xl font-bold border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-              <span>Entrar com Google</span>
             </button>
           </form>
 

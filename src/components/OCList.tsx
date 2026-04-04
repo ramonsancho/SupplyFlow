@@ -38,6 +38,7 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
+  setDoc,
   serverTimestamp,
   query,
   orderBy,
@@ -66,9 +67,37 @@ export default function OCList() {
   useEffect(() => {
     if (auth.currentUser) {
       const userRef = doc(db, 'users', auth.currentUser.uid);
-      const unsubscribeUser = onSnapshot(userRef, (doc) => {
-        if (doc.exists()) {
-          setCurrentUserProfile({ ...doc.data(), id: doc.id } as User);
+      const unsubscribeUser = onSnapshot(userRef, async (docSnap) => {
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
+          const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+          
+          // Self-healing for bootstrap admins
+          if (bootstrapEmails.includes(userEmail)) {
+            let needsUpdate = false;
+            const updates: any = {};
+            
+            if (userData.role !== 'Administrador') {
+              updates.role = 'Administrador';
+              needsUpdate = true;
+            }
+            
+            if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+              updates.name = "Ramon Souza";
+              needsUpdate = true;
+            }
+            
+            if (needsUpdate) {
+              try {
+                await setDoc(userRef, updates, { merge: true });
+              } catch (e) {
+                console.error('Error self-healing bootstrap admin in OCList:', e);
+              }
+            }
+          }
+          
+          setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
         }
       }, (error) => {
         try {
@@ -268,19 +297,20 @@ export default function OCList() {
     }
   };
 
-  const handleCompletePO = async (rating: number) => {
+  const handleCompletePO = async (rating: number, hasRNC: boolean) => {
     if (!selectedPO) return;
 
     try {
-      // 1. Update the PO status to 'closed' and save the rating
+      // 1. Update the PO status to 'closed' and save the rating and RNC
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), {
         status: 'closed',
         rating,
+        hasRNC,
         completedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
 
-      // 2. Recalculate the supplier's average rating
+      // 2. Recalculate the supplier's average rating and accuracy
       const q = query(
         collection(db, 'purchase-orders'), 
         where('supplierId', '==', selectedPO.supplierId),
@@ -290,27 +320,32 @@ export default function OCList() {
       const querySnapshot = await getDocs(q);
       const completedPOs = querySnapshot.docs.map(doc => doc.data() as PurchaseOrder);
       
-      // Include the current rating in the calculation (since query might not have it yet if it's not real-time enough)
-      // Actually, getDocs should be fine, but let's be safe.
+      // Include current data if not in snapshot
       const ratings = completedPOs.map(p => p.rating).filter(r => r !== undefined) as number[];
-      
-      // Add the current one if it's not already there (it shouldn't be in the snapshot yet)
-      if (!ratings.includes(rating)) {
+      const rncValues = completedPOs.map(p => p.hasRNC).filter(r => r !== undefined) as boolean[];
+
+      if (!completedPOs.some(p => p.id === selectedPO.id)) {
         ratings.push(rating);
+        rncValues.push(hasRNC);
       }
 
       const averageRating = ratings.reduce((acc, r) => acc + r, 0) / ratings.length;
+      
+      // Accuracy: percentage of POs WITHOUT RNC
+      const accuratePOs = rncValues.filter(r => r === false).length;
+      const accuracy = (accuratePOs / rncValues.length) * 100;
 
       // 3. Update the supplier document
       await updateDoc(doc(db, 'suppliers', selectedPO.supplierId), {
         rating: Number(averageRating.toFixed(1)),
+        accuracy: Number(accuracy.toFixed(1)),
         updatedAt: serverTimestamp()
       });
 
       setIsRatingModalOpen(false);
       setSelectedPO(null);
       await addLog('Concluiu OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
-      await addNotification('OC Concluída', `A ordem de compra #${selectedPO.number} foi concluída com nota ${rating}.`, 'success');
+      await addNotification('OC Concluída', `A ordem de compra #${selectedPO.number} foi concluída com nota ${rating} e RNC: ${hasRNC ? 'SIM' : 'NÃO'}.`, 'success');
     } catch (error) {
       try {
         handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${selectedPO.id}`);
@@ -478,7 +513,7 @@ export default function OCList() {
       <RatingModal
         isOpen={isRatingModalOpen}
         onClose={() => setIsRatingModalOpen(false)}
-        onSubmit={(rating) => handleCompletePO(rating).catch(err => console.error('Error in handleCompletePO:', err))}
+        onSubmit={(rating, hasRNC) => handleCompletePO(rating, hasRNC).catch(err => console.error('Error in handleCompletePO:', err))}
         poNumber={selectedPO?.number || 0}
         supplierName={selectedPO?.supplierName || ''}
       />

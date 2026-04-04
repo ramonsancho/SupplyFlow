@@ -15,6 +15,7 @@
 //   - families: list (required, strings, max 10 items)
 //   - paymentTerms: string (optional, 0-100 chars)
 //   - rating: number (optional, 0-10)
+//   - accuracy: number (optional, 0-100)
 //   - isCritical: bool (optional)
 //   - notes: string (optional, 0-1000 chars)
 //   - createdAt: timestamp (required)
@@ -56,6 +57,7 @@
 //   - receivedAmount: number (required, positive)
 //   - items: list (required, maps, max 50 items)
 //   - rating: number (optional, 0-10)
+//   - hasRNC: bool (optional)
 //   - completedAt: timestamp (optional)
 //   - approvedAt: timestamp (optional)
 //   - createdAt: timestamp (required)
@@ -143,6 +145,7 @@ service cloud.firestore {
              isValidEmail(data.email) &&
              data.families is list &&
              (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
+             (!('accuracy' in data) || (data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100)) &&
              (!('isCritical' in data) || data.isCritical is bool) &&
              data.createdAt is timestamp;
     }
@@ -166,6 +169,7 @@ service cloud.firestore {
              data.receivedAmount is number && data.receivedAmount >= 0 &&
              data.items is list &&
              (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
+             (!('hasRNC' in data) || data.hasRNC is bool) &&
              (!('completedAt' in data) || data.completedAt is timestamp) &&
              (!('approvedAt' in data) || data.approvedAt is timestamp) &&
              (!('approvedBy' in data) || data.approvedBy is string) &&
@@ -233,8 +237,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if (isAuthenticated() && (isAdmin() || (request.auth.uid == userId && request.resource.data.email == request.auth.token.email))) && isValidUser(request.resource.data);
-      allow update: if (isAuthenticated() && (isAdmin() || (request.auth.uid == userId && request.resource.data.email == request.auth.token.email && request.resource.data.role == resource.data.role))) && isValidUser(request.resource.data);
+      allow create: if isAdmin() && isValidUser(request.resource.data);
+      allow update: if (isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.email == resource.data.email && request.resource.data.role == resource.data.role)) && isValidUser(request.resource.data);
       allow delete: if isAdmin();
     }
 
