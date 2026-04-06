@@ -67,7 +67,7 @@ export default function OCList() {
   useEffect(() => {
     if (auth.currentUser) {
       const userRef = doc(db, 'users', auth.currentUser.uid);
-      const unsubscribeUser = onSnapshot(userRef, async (docSnap) => {
+      const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
           const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
@@ -89,11 +89,9 @@ export default function OCList() {
             }
             
             if (needsUpdate) {
-              try {
-                await setDoc(userRef, updates, { merge: true });
-              } catch (e) {
+              setDoc(userRef, updates, { merge: true }).catch(e => {
                 console.error('Error self-healing bootstrap admin in OCList:', e);
-              }
+              });
             }
           }
           

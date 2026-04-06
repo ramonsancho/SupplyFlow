@@ -51,7 +51,7 @@ export default function UserList() {
 
     if (auth.currentUser) {
       const userRef = doc(db, 'users', auth.currentUser.uid);
-      unsubscribeProfile = onSnapshot(userRef, async (docSnap) => {
+      unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
           const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
@@ -73,11 +73,9 @@ export default function UserList() {
             }
             
             if (needsUpdate) {
-              try {
-                await setDoc(userRef, updates, { merge: true });
-              } catch (e) {
+              setDoc(userRef, updates, { merge: true }).catch(e => {
                 console.error('Error self-healing bootstrap admin in UserList:', e);
-              }
+              });
             }
           }
           

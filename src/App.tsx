@@ -30,7 +30,7 @@ export default function App() {
 
     let unsubProfile: (() => void) | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       try {
         clearTimeout(timeout);
         
