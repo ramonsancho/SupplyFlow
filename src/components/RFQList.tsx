@@ -191,8 +191,17 @@ export default function RFQList() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Falha ao enviar e-mail.');
+          let errorMessage = 'Falha ao enviar e-mail.';
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            const text = await response.text();
+            console.error('Non-JSON error response:', text);
+            errorMessage = `Erro do servidor (${response.status}): ${response.statusText}`;
+          }
+          throw new Error(errorMessage);
         }
       });
 
