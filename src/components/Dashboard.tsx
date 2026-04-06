@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState(30);
 
   useEffect(() => {
     const unsubscribePOs = onSnapshot(collection(db, 'purchase-orders'), (snapshot) => {
@@ -95,11 +96,28 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Filter data based on selected period
+  const filteredPOs = pos.filter(po => {
+    if (selectedPeriod === 0) return true;
+    const poDate = new Date(po.createdAt);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - selectedPeriod);
+    return poDate >= cutoff;
+  });
+
+  const filteredRFQs = rfqs.filter(rfq => {
+    if (selectedPeriod === 0) return true;
+    const rfqDate = new Date(rfq.createdAt);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - selectedPeriod);
+    return rfqDate >= cutoff;
+  });
+
   // Calculate KPIs
-  const totalSpent = pos.reduce((acc, po) => acc + po.totalAmount, 0);
+  const totalSpent = filteredPOs.reduce((acc, po) => acc + po.totalAmount, 0);
   
   // Total Savings: difference between highest and accepted proposal for each RFQ
-  const totalSavings = rfqs.reduce((acc, rfq) => {
+  const totalSavings = filteredRFQs.reduce((acc, rfq) => {
     const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
     const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
     if (acceptedProposal && rfqProposals.length >= 2) {
@@ -110,12 +128,12 @@ export default function Dashboard() {
     return acc;
   }, 0);
 
-  const openPOsAmount = pos.filter(po => po.status !== 'received' && po.status !== 'closed')
+  const openPOsAmount = filteredPOs.filter(po => po.status !== 'received' && po.status !== 'closed')
                            .reduce((acc, po) => acc + (po.totalAmount - po.receivedAmount), 0);
-  const openPOsCount = pos.filter(po => po.status !== 'received' && po.status !== 'closed').length;
+  const openPOsCount = filteredPOs.filter(po => po.status !== 'received' && po.status !== 'closed').length;
   
   // Calculate Average Approval Time (in hours)
-  const approvedPOs = pos.filter(po => po.approvedAt && po.createdAt);
+  const approvedPOs = filteredPOs.filter(po => po.approvedAt && po.createdAt);
   const totalApprovalTime = approvedPOs.reduce((acc, po) => {
     const start = new Date(po.createdAt).getTime();
     const end = new Date(po.approvedAt!).getTime();
@@ -126,7 +144,7 @@ export default function Dashboard() {
     : '0';
 
   // Calculate Average Lead Time (in days)
-  const receivedPOs = pos.filter(po => po.receivedAt && po.createdAt);
+  const receivedPOs = filteredPOs.filter(po => po.receivedAt && po.createdAt);
   const totalLeadTime = receivedPOs.reduce((acc, po) => {
     const start = new Date(po.createdAt).getTime();
     const end = new Date(po.receivedAt!).getTime();
@@ -152,7 +170,7 @@ export default function Dashboard() {
 
   // Top Suppliers Ranking
   const supplierSpend: Record<string, { name: string, total: number }> = {};
-  pos.forEach(po => {
+  filteredPOs.forEach(po => {
     if (!supplierSpend[po.supplierId]) {
       supplierSpend[po.supplierId] = { name: po.supplierName, total: 0 };
     }
@@ -164,7 +182,7 @@ export default function Dashboard() {
 
   // Spend by Family
   const familySpend: Record<string, number> = {};
-  pos.forEach(po => {
+  filteredPOs.forEach(po => {
     // We assume each PO belongs to a family based on the supplier's primary family or items
     // For simplicity, let's use the first family of the supplier if available
     const supplier = suppliers.find(s => s.id === po.supplierId);
@@ -253,9 +271,24 @@ export default function Dashboard() {
           <p className="text-[#8E9299] mt-1">Visão geral da performance de compras e fornecedores.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-[#141414] bg-white px-4 py-2 rounded-full border border-[#E5E5E5]">
-            <Clock size={16} />
-            <span>Últimos 30 dias</span>
+          <div className="relative">
+            <select 
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(Number(e.target.value))}
+              className="appearance-none flex items-center gap-2 text-sm font-medium text-[#141414] bg-white pl-10 pr-8 py-2 rounded-full border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#141414] cursor-pointer transition-all"
+            >
+              <option value={30}>Últimos 30 dias</option>
+              <option value={90}>Últimos 3 meses</option>
+              <option value={180}>Últimos 6 meses</option>
+              <option value={365}>Últimos 12 meses</option>
+              <option value={0}>Todo o período</option>
+            </select>
+            <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" />
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L5 5L9 1" stroke="#8E9299" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
           </div>
         </div>
       </div>

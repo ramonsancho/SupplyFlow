@@ -48,6 +48,7 @@ export default function RFQList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRFQ, setSelectedRFQ] = useState<RFQ | null>(null);
   const [rfqToDelete, setRfqToDelete] = useState<{id: string, number: number} | null>(null);
+  const [rfqToSendEmail, setRfqToSendEmail] = useState<{id: string, number: number, family: string} | null>(null);
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
@@ -115,6 +116,10 @@ export default function RFQList() {
 
   const handleSendEmail = async (id: string) => {
     try {
+      if (!auth.currentUser) {
+        await addNotification('Erro', 'Você precisa estar logado para enviar emails.', 'error');
+        return;
+      }
       const rfqDoc = await getDoc(doc(db, 'rfqs', id));
       if (!rfqDoc.exists()) {
         await addNotification('Erro', 'Cotação não encontrada.', 'error');
@@ -202,7 +207,7 @@ export default function RFQList() {
       await addLog('Enviou RFQ por Email', 'RFQ', id, auth.currentUser?.email || 'Unknown');
     } catch (error) {
       console.error('Error sending RFQ emails:', error);
-      await addNotification('Erro', 'Não foi possível enviar a cotação por email.', 'error');
+      await addNotification('Erro', error instanceof Error ? error.message : 'Não foi possível enviar a cotação por email.', 'error');
     }
   };
 
@@ -352,6 +357,21 @@ export default function RFQList() {
         variant="danger"
       />
 
+      <ConfirmModal
+        isOpen={!!rfqToSendEmail}
+        onClose={() => setRfqToSendEmail(null)}
+        onConfirm={() => {
+          if (rfqToSendEmail) {
+            handleSendEmail(rfqToSendEmail.id).catch(err => console.error('Error in handleSendEmail:', err));
+            setRfqToSendEmail(null);
+          }
+        }}
+        title="Disparar Cotação"
+        message={`Deseja enviar esta cotação por email para todos os fornecedores da família "${rfqToSendEmail?.family}"?`}
+        confirmText="Enviar Emails"
+        variant="info"
+      />
+
       {selectedRFQ && (
         <RFQDetailsModal 
           isOpen={!!selectedRFQ}
@@ -442,7 +462,7 @@ export default function RFQList() {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleSendEmail(rfq.id).catch(err => console.error('Error in handleSendEmail:', err));
+                          setRfqToSendEmail({ id: rfq.id, number: rfq.number, family: rfq.family || '' });
                         }}
                         className={cn(
                           "p-2 rounded-full transition-all",
