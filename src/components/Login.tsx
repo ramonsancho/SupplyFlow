@@ -224,8 +224,13 @@ export default function Login() {
           
           <div className="relative z-10">
             <div className="flex items-center gap-4 mb-12">
-              <div className="w-12 h-12 bg-brand-500 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20">
-                <Building2 className="text-white" size={24} />
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20 overflow-hidden">
+                <img 
+                  src="https://i.ibb.co/PvHCyFtf/logo.png" 
+                  alt="SupplyFlow Logo" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               </div>
               <h1 className="text-2xl font-bold tracking-tight">SupplyFlow</h1>
             </div>
@@ -255,8 +260,13 @@ export default function Login() {
         <div className="p-8 lg:p-16 bg-white">
           <div className="flex flex-col items-center lg:items-start mb-10">
             <div className="lg:hidden flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
-                <Building2 className="text-white" size={20} />
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
+                <img 
+                  src="https://i.ibb.co/PvHCyFtf/logo.png" 
+                  alt="SupplyFlow Logo" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               </div>
               <h1 className="text-2xl font-bold text-slate-900">SupplyFlow</h1>
             </div>

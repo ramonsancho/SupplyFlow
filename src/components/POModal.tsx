@@ -10,6 +10,7 @@ import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 const poSchema = z.object({
   supplierId: z.string().min(1, 'Selecione um fornecedor'),
   family: z.string().optional(),
+  deliveryDate: z.string().min(1, 'Data de entrega obrigatória'),
   status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed']),
   items: z.array(z.object({
     description: z.string().min(3, 'Descrição obrigatória'),
@@ -39,6 +40,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
     defaultValues: {
       supplierId: initialData?.supplierId || '',
       family: initialData?.family || '',
+      deliveryDate: initialData?.deliveryDate || '',
       status: initialData?.status || 'draft',
       items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
     }
@@ -50,6 +52,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
       reset({
         supplierId: initialData?.supplierId || '',
         family: initialData?.family || '',
+        deliveryDate: initialData?.deliveryDate || '',
         status: initialData?.status || 'draft',
         items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
       });
@@ -160,6 +163,16 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
                 <option value="draft">Rascunho</option>
                 <option value="pending_approval">Pendente de Aprovação</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Prazo de Entrega</label>
+              <input 
+                type="date"
+                {...register('deliveryDate')}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+              />
+              {errors.deliveryDate && <p className="text-xs text-red-500 font-medium">{errors.deliveryDate.message}</p>}
             </div>
           </div>
 

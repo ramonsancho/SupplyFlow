@@ -35,6 +35,22 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState(30);
 
+  const criticalAlerts = pos.filter(po => {
+    if (po.status === 'received' || po.status === 'closed' || po.status === 'draft') return false;
+    if (po.receivedAmount > 0) return false;
+    if (!po.deliveryDate) return false;
+    
+    const deliveryDate = new Date(po.deliveryDate);
+    const now = new Date();
+    const diffDays = Math.ceil((deliveryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return diffDays <= 7; // Vencido ou vence em até 7 dias
+  }).sort((a, b) => {
+    const dateA = new Date(a.deliveryDate!).getTime();
+    const dateB = new Date(b.deliveryDate!).getTime();
+    return dateA - dateB;
+  });
+
   useEffect(() => {
     const unsubscribePOs = onSnapshot(collection(db, 'purchase-orders'), (snapshot) => {
       const data = snapshot.docs.map(doc => {
@@ -573,42 +589,54 @@ export default function Dashboard() {
           <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
             <div>
               <h3 className="text-lg font-bold text-slate-900">Alertas Críticos</h3>
-              <p className="text-xs text-slate-500 mt-1">Acompanhamento de RFQs e prazos.</p>
+              <p className="text-xs text-slate-500 mt-1">POs sem recebimento e prazo crítico.</p>
             </div>
-            <div className="px-3 py-1 bg-brand-50 text-brand-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
-              {rfqs.length} Ativas
+            <div className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+              {criticalAlerts.length} Críticos
             </div>
           </div>
           <div className="divide-y divide-slate-50">
-            {rfqs.slice(0, 5).map(rfq => (
-              <div key={rfq.id} className="p-6 flex items-start gap-5 hover:bg-slate-50 transition-all duration-300 cursor-pointer group">
-                <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform">
-                  <Clock size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-bold text-slate-900 truncate">RFQ #{rfq.number} — {rfq.title}</p>
-                    <ArrowUpRight size={14} className="text-slate-300 group-hover:text-brand-500 transition-colors" />
+            {criticalAlerts.slice(0, 5).map(po => {
+              const deliveryDate = new Date(po.deliveryDate!);
+              const now = new Date();
+              const isOverdue = deliveryDate < now;
+              
+              return (
+                <div key={po.id} className="p-6 flex items-start gap-5 hover:bg-slate-50 transition-all duration-300 cursor-pointer group">
+                  <div className={cn(
+                    "p-3 rounded-2xl group-hover:scale-110 transition-transform",
+                    isOverdue ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
+                  )}>
+                    <AlertCircle size={20} />
                   </div>
-                  <div className="flex items-center gap-4">
-                    <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                      <Calendar size={12} />
-                      Vence em {new Date(rfq.desiredDate).toLocaleDateString()}
-                    </p>
-                    <span className="w-1 h-1 rounded-full bg-slate-300" />
-                    <p className="text-[10px] font-bold text-brand-600 uppercase tracking-widest">Aguardando Propostas</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-bold text-slate-900 truncate">OC #{po.number} — {po.supplierName}</p>
+                      <ArrowUpRight size={14} className="text-slate-300 group-hover:text-brand-500 transition-colors" />
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <p className={cn(
+                        "text-xs flex items-center gap-1.5 font-medium",
+                        isOverdue ? "text-rose-600" : "text-slate-500"
+                      )}>
+                        <Calendar size={12} />
+                        {isOverdue ? 'Vencido em' : 'Vence em'} {deliveryDate.toLocaleDateString()}
+                      </p>
+                      <span className="w-1 h-1 rounded-full bg-slate-300" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">R$ {po.totalAmount.toLocaleString()}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {rfqs.length === 0 && (
+              );
+            })}
+            {criticalAlerts.length === 0 && (
               <div className="p-12 text-center text-slate-400 text-sm font-medium italic">
                 Nenhum alerta crítico no momento.
               </div>
             )}
           </div>
           <div className="p-6 bg-slate-50/50 border-t border-slate-100 text-center">
-            <button className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-[0.2em]">Ver Todas as Cotações</button>
+            <button className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-[0.2em]">Ver Todas as Ordens</button>
           </div>
         </motion.div>
       </div>

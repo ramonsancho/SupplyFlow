@@ -108,6 +108,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         supplierId: proposal.supplierId,
         supplierName: proposal.supplierName,
         family: rfq.family,
+        deliveryDate: proposal.deliveryDate,
         status: 'pending_approval',
         totalAmount: proposal.totalValue,
         receivedAmount: 0,

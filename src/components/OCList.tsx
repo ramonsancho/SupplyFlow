@@ -576,6 +576,12 @@ export default function OCList() {
                 </div>
                 <h3 className="text-lg font-bold text-[#141414]">{oc.supplierName}</h3>
                 <p className="text-xs text-[#8E9299] mt-1">Emitida em {new Date(oc.createdAt).toLocaleDateString()}</p>
+                {oc.deliveryDate && (
+                  <p className="text-xs text-brand-600 font-bold mt-1 flex items-center gap-1">
+                    <Calendar size={12} />
+                    Entrega: {new Date(oc.deliveryDate).toLocaleDateString()}
+                  </p>
+                )}
                 {oc.createdByName && (
                   <p className="text-[10px] text-[#8E9299] font-bold mt-1">
                     Criado por {oc.createdByName}

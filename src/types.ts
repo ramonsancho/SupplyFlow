@@ -75,6 +75,7 @@ export type PurchaseOrder = {
   hasRNC?: boolean;
   completedAt?: string;
   receivedAt?: string;
+  deliveryDate?: string;
 };
 
 export type POItem = {
