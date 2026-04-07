@@ -49,17 +49,36 @@ apiRouter.post("/send-email", async (req, res) => {
   });
 
   try {
-    const recipients = Array.isArray(to) ? to.join(', ') : to;
-
-    await transporter.sendMail({
-      from: `"${fromName || 'SupplyFlow'}" <${process.env.SMTP_FROM || user}>`,
-      to: recipients,
-      subject,
-      html,
-      replyTo,
-    });
+    const from = `"${fromName || 'SupplyFlow'}" <${process.env.SMTP_FROM || user}>`;
     
-    console.log(`[Email] Sucesso! Enviado para: ${recipients}`);
+    if (Array.isArray(to)) {
+      // Enviar e-mails individualizados para cada destinatário
+      console.log(`[Email] Enviando ${to.length} e-mails individuais...`);
+      
+      const emailPromises = to.map(recipient => 
+        transporter.sendMail({
+          from,
+          to: recipient,
+          subject,
+          html,
+          replyTo,
+        })
+      );
+      
+      await Promise.all(emailPromises);
+      console.log(`[Email] Sucesso! ${to.length} e-mails individuais enviados.`);
+    } else {
+      // Envio único para um único destinatário
+      await transporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        replyTo,
+      });
+      console.log(`[Email] Sucesso! E-mail enviado para: ${to}`);
+    }
+    
     res.json({ success: true });
   } catch (error) {
     console.error("[Email] Erro no transporte SMTP:", error);
