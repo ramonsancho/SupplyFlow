@@ -18,27 +18,15 @@ import RFQModal from './RFQModal';
 import ConfirmModal from './ConfirmModal';
 import RFQDetailsModal from './RFQDetailsModal';
 import { RFQ } from '../types';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { emailService } from '../services/emailService';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, deleteDoc, getDoc, getDocs, where, updateDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  serverTimestamp,
-  query,
-  orderBy,
-  getDoc,
-  getDocs,
-  where
-} from 'firebase/firestore';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -148,64 +136,41 @@ export default function RFQList() {
       const userProfileDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
       const userProfile = userProfileDoc.exists() ? userProfileDoc.data() : null;
 
-      // Enviar email para cada fornecedor via API backend
-      const emailPromises = supplierEmails.map(async (email) => {
-        const response = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: email,
-            subject: `Solicitação de Cotação #${rfq.number} - ${rfq.title}`,
-            fromName: userProfile?.name || 'SupplyFlow',
-            replyTo: auth.currentUser?.email,
-            html: `
-              <div style="font-family: sans-serif; color: #141414; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E5E5; rounded: 12px;">
-                <h2 style="color: #141414;">Solicitação de Cotação #${rfq.number}</h2>
-                <p>Prezado fornecedor,</p>
-                <p>Gostaríamos de solicitar uma cotação para os seguintes itens:</p>
-                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                  <thead>
-                    <tr style="background-color: #F5F5F5;">
-                      <th style="padding: 10px; border: 1px solid #E5E5E5; text-align: left;">Descrição</th>
-                      <th style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">Qtd</th>
-                      <th style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">Unidade</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${rfq.items.map(item => `
-                      <tr>
-                        <td style="padding: 10px; border: 1px solid #E5E5E5;">${item.description}</td>
-                        <td style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">${item.quantity}</td>
-                        <td style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">${item.unit}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-                <p><strong>Data Desejada para Entrega:</strong> ${new Date(rfq.desiredDate).toLocaleDateString()}</p>
-                <p>Por favor, envie sua proposta respondendo a este e-mail ou através do nosso portal.</p>
-                <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 20px 0;" />
-                <p style="font-size: 12px; color: #8E9299;">Atenciosamente,<br /><strong>${userProfile?.name || 'Equipe de Compras'}</strong><br />SupplyFlow Management System</p>
-              </div>
-            `
-          })
-        });
-
-        if (!response.ok) {
-          let errorMessage = 'Falha ao enviar e-mail.';
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
-          } else {
-            const text = await response.text();
-            console.error('Non-JSON error response:', text);
-            errorMessage = `Erro do servidor (${response.status}): ${response.statusText}`;
-          }
-          throw new Error(errorMessage);
-        }
+      // Enviar email para todos os fornecedores via serviço de email
+      await emailService.sendCustomEmail({
+        to: supplierEmails,
+        subject: `Solicitação de Cotação #${rfq.number} - ${rfq.title}`,
+        fromName: userProfile?.name || 'SupplyFlow',
+        html: `
+          <div style="font-family: sans-serif; color: #141414; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E5E5; border-radius: 12px;">
+            <h2 style="color: #141414;">Solicitação de Cotação #${rfq.number}</h2>
+            <p>Prezado fornecedor,</p>
+            <p>Gostaríamos de solicitar uma cotação para os seguintes itens:</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <thead>
+                <tr style="background-color: #F5F5F5;">
+                  <th style="padding: 10px; border: 1px solid #E5E5E5; text-align: left;">Descrição</th>
+                  <th style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">Qtd</th>
+                  <th style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">Unidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rfq.items.map(item => `
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #E5E5E5;">${item.description}</td>
+                    <td style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">${item.quantity}</td>
+                    <td style="padding: 10px; border: 1px solid #E5E5E5; text-align: center;">${item.unit}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <p><strong>Data Desejada para Entrega:</strong> ${new Date(rfq.desiredDate).toLocaleDateString()}</p>
+            <p>Por favor, envie sua proposta respondendo a este e-mail ou através do nosso portal.</p>
+            <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #8E9299;">Atenciosamente,<br /><strong>${userProfile?.name || 'Equipe de Compras'}</strong><br />SupplyFlow Management System</p>
+          </div>
+        `
       });
-
-      await Promise.all(emailPromises);
 
       await updateDoc(doc(db, 'rfqs', id), {
         status: 'sent',
