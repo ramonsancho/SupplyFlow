@@ -9,7 +9,11 @@ import {
   CheckCircle,
   XCircle,
   Key,
-  Mail
+  Mail,
+  ChevronRight,
+  ShieldCheck,
+  Lock,
+  UserCheck
 } from 'lucide-react';
 import UserModal from './UserModal';
 import ConfirmModal from './ConfirmModal';
@@ -33,6 +37,13 @@ import {
 } from 'firebase/firestore';
 import { initializeApp, getAuth as getAuthSecondary, createUserWithEmailAndPassword, firebaseConfig } from '../firebase';
 import { deleteApp, getApps } from 'firebase/app';
+import { motion, AnimatePresence } from 'motion/react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export default function UserList() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,7 +68,6 @@ export default function UserList() {
           const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
           const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
           
-          // Self-healing for bootstrap admins
           if (bootstrapEmails.includes(userEmail)) {
             let needsUpdate = false;
             const updates: any = {};
@@ -125,7 +135,6 @@ export default function UserList() {
         await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
         await addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
-        // 1. Criar no Firebase Auth usando uma instância secundária para não deslogar o admin
         const tempPassword = Math.random().toString(36).slice(-10);
         const appName = `SecondaryApp-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         secondaryApp = initializeApp(firebaseConfig, appName);
@@ -134,13 +143,11 @@ export default function UserList() {
         const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPassword);
         const uid = userCredential.user.uid;
         
-        // 2. Salvar no Firestore usando o UID do Auth como ID do documento
         await setDoc(doc(db, 'users', uid), {
           ...data,
           createdAt: serverTimestamp()
         });
         
-        // 3. Enviar email de redefinição de senha imediatamente
         try {
           await sendPasswordResetEmail(auth, data.email);
         } catch (resetError) {
@@ -168,7 +175,6 @@ export default function UserList() {
     } finally {
       if (secondaryApp) {
         try {
-          // Pequeno delay para garantir que as operações do Auth foram concluídas
           await new Promise(resolve => setTimeout(resolve, 500));
           await deleteApp(secondaryApp);
         } catch (deleteError) {
@@ -209,20 +215,23 @@ export default function UserList() {
   );
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-12">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Usuários</h2>
-          <p className="text-[#8E9299] mt-1">Gerencie os acessos e permissões do sistema.</p>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900">Gestão de Usuários</h2>
+          <p className="text-slate-500 mt-2 text-lg font-medium">Controle acessos, perfis e limites de aprovação.</p>
         </div>
         {currentUserProfile?.role === 'Administrador' && (
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+            className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 transition-all duration-300 self-start"
           >
             <Plus size={20} />
             <span>Novo Usuário</span>
-          </button>
+          </motion.button>
         )}
       </div>
 
@@ -256,114 +265,140 @@ export default function UserList() {
         variant="info"
       />
 
-      <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+      {/* Search Bar */}
+      <div className="bg-white p-3 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input 
             type="text" 
-            placeholder="Buscar por nome ou email..." 
-            className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#141414]"
+            placeholder="Buscar por nome ou email do usuário..." 
+            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#141414]"></div>
-        </div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-[#E5E5E5] p-12 text-center">
-          <UserIcon size={48} className="mx-auto text-[#E5E5E5] mb-4" />
-          <h3 className="text-lg font-bold text-[#141414]">Nenhum usuário encontrado</h3>
-          <p className="text-[#8E9299] mt-1">Tente ajustar seus filtros ou cadastre um novo usuário.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-3xl border border-[#E5E5E5] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F5F5F5] border-b border-[#E5E5E5]">
-                <th className="px-6 py-4 text-xs font-bold text-[#141414] uppercase tracking-widest">Usuário</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#141414] uppercase tracking-widest">Perfil</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#141414] uppercase tracking-widest">Limite de Aprovação</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#141414] uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#141414] uppercase tracking-widest text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5E5E5]">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-[#F9F9F9] transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[#141414] text-white flex items-center justify-center font-bold">
-                        {user.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-[#141414]">{user.name}</p>
-                        <p className="text-xs text-[#8E9299]">{user.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-[#141414]">
-                      <Shield size={16} className="text-[#8E9299]" />
-                      {user.role}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-[#141414]">
-                      {user.approvalLimit ? `R$ ${user.approvalLimit.toLocaleString()}` : 'R$ 0,00'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                      user.status === 'Ativo' 
-                        ? 'bg-green-50 text-green-700' 
-                        : 'bg-red-50 text-red-700'
-                    }`}>
-                      {user.status === 'Ativo' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {currentUserProfile?.role === 'Administrador' && (
-                        <>
-                          <button 
-                            onClick={() => setResetPasswordEmail(user.email)}
-                            className="p-2 text-[#8E9299] hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
-                            title="Resetar Senha"
-                          >
-                            <Key size={18} />
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setEditingUser(user);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-2 text-[#8E9299] hover:text-[#141414] hover:bg-[#F5F5F5] rounded-full transition-all"
-                            title="Editar"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button 
-                            onClick={() => setUserToDelete({ id: user.id, name: user.name })}
-                            className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
-                            title="Excluir"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+      {/* Users Table Container */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 border-4 border-slate-200 rounded-full" />
+              <div className="absolute inset-0 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="p-20 text-center">
+            <div className="w-20 h-20 bg-slate-50 rounded-[1.5rem] flex items-center justify-center mx-auto mb-6">
+              <UserIcon size={32} className="text-slate-300" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Nenhum usuário encontrado</h3>
+            <p className="text-slate-500 mt-2 font-medium">Cadastre novos membros da equipe para colaborar no sistema.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100">
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Usuário</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Perfil & Acesso</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Limite de Aprovação</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Status</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 text-right">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredUsers.map((user, idx) => (
+                  <motion.tr 
+                    key={user.id} 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="hover:bg-slate-50/50 transition-all duration-300 group"
+                  >
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-lg group-hover:bg-brand-500 group-hover:text-white transition-all duration-500 shadow-inner">
+                          {user.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{user.name}</p>
+                          <p className="text-xs font-medium text-slate-400">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-2.5 text-sm font-bold text-slate-700">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-brand-500 transition-colors">
+                          <Shield size={16} />
+                        </div>
+                        {user.role}
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="text-sm font-mono font-bold text-slate-900">
+                        {user.approvalLimit ? `R$ ${user.approvalLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={cn(
+                        "inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent",
+                        user.status === 'Ativo' 
+                          ? 'bg-emerald-50 text-emerald-600' 
+                          : 'bg-rose-50 text-rose-600'
+                      )}>
+                        {user.status === 'Ativo' ? <UserCheck size={12} /> : <Lock size={12} />}
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center justify-end gap-2">
+                        {currentUserProfile?.role === 'Administrador' && (
+                          <>
+                            <motion.button 
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => setResetPasswordEmail(user.email)}
+                              className="p-3 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-2xl transition-all duration-300"
+                              title="Resetar Senha"
+                            >
+                              <Key size={18} />
+                            </motion.button>
+                            <motion.button 
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => {
+                                setEditingUser(user);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all duration-300"
+                              title="Editar"
+                            >
+                              <Edit size={18} />
+                            </motion.button>
+                            <motion.button 
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => setUserToDelete({ id: user.id, name: user.name })}
+                              className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all duration-300"
+                              title="Excluir"
+                            >
+                              <Trash2 size={18} />
+                            </motion.button>
+                          </>
+                        )}
+                        <ChevronRight size={20} className="text-slate-200 group-hover:text-brand-500 group-hover:translate-x-1 transition-all ml-2" />
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+

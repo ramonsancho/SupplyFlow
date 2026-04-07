@@ -12,7 +12,10 @@ import {
   ChevronRight,
   Mail,
   Trash2,
-  Tag
+  Tag,
+  ArrowUpRight,
+  Download,
+  Send
 } from 'lucide-react';
 import RFQModal from './RFQModal';
 import ConfirmModal from './ConfirmModal';
@@ -27,6 +30,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { motion, AnimatePresence } from 'motion/react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -39,6 +43,7 @@ export default function RFQList() {
   const [rfqToSendEmail, setRfqToSendEmail] = useState<{id: string, number: number, family: string} | null>(null);
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
 
@@ -65,7 +70,6 @@ export default function RFQList() {
 
   const handleAddRFQ = async (data: any) => {
     try {
-      // Final safety check to remove any undefined values that Firestore rejects
       const rfqPayload = JSON.parse(JSON.stringify({
         ...data,
         number: rfqs.length + 1001,
@@ -120,7 +124,6 @@ export default function RFQList() {
         return;
       }
 
-      // Buscar fornecedores da mesma família
       const suppliersRef = collection(db, 'suppliers');
       const q = query(suppliersRef, where('families', 'array-contains', rfq.family));
       const querySnapshot = await getDocs(q);
@@ -132,11 +135,9 @@ export default function RFQList() {
         return;
       }
 
-      // Buscar perfil do usuário atual para o remetente
       const userProfileDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
       const userProfile = userProfileDoc.exists() ? userProfileDoc.data() : null;
 
-      // Enviar email para todos os fornecedores via serviço de email
       await emailService.sendCustomEmail({
         to: supplierEmails,
         subject: `Solicitação de Cotação #${rfq.number} - ${rfq.title}`,
@@ -187,13 +188,9 @@ export default function RFQList() {
 
   const generatePDF = (rfq: RFQ) => {
     const doc = new jsPDF();
-    
-    // Header (Identical to PO)
-    // Logo (Top Left)
     try {
       doc.addImage('https://i.ibb.co/PvHCyFtf/logo.png', 'PNG', 10, 10, 30, 30);
     } catch (e) {
-      // Fallback if image fails
       doc.setFillColor(0, 82, 255);
       doc.rect(10, 10, 30, 30, 'F');
       doc.setTextColor(255, 255, 255);
@@ -202,43 +199,32 @@ export default function RFQList() {
       doc.text('SupplyFlow', 25, 28, { align: 'center' });
     }
 
-    // Company Info
     doc.setTextColor(20, 20, 20);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('OEG DO BRASIL ACONDICIONAMENTO LOCAÇÃO E SERVIÇOS INDUSTRIAIS E COMERCIAIS LTDA', 115, 20, { align: 'center', maxWidth: 130 });
-    
     doc.setFontSize(10);
     doc.text('CNPJ: 13.595.820/0001-15', 115, 32, { align: 'center' });
-
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text('RUA COSME VELHO, 410, QD J, LT 02A - CABIÚNAS - MACAÉ - RJ', 115, 38, { align: 'center' });
     doc.text('CEP: 27977-315 - Telefone: (22) 2020-0255 | https://www.oeg.group/', 115, 44, { align: 'center' });
     doc.text('financebrasil@oegoffshore.com', 115, 50, { align: 'center' });
-
     doc.setLineWidth(0.5);
     doc.line(10, 55, 200, 55);
-
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('SOLICITAÇÃO DE COTAÇÃO (RFQ)', 105, 62, { align: 'center' });
     doc.text(`#${rfq.number}`, 10, 69);
     doc.setFont('helvetica', 'normal');
     doc.text(`Data de Emissão: ${new Date(rfq.createdAt).toLocaleDateString()}`, 150, 69);
-
     doc.setFontSize(10);
     doc.text(`Data Desejada: ${new Date(rfq.desiredDate).toLocaleDateString()}`, 10, 75);
-    if (rfq.family) {
-      doc.text(`Família: ${rfq.family}`, 10, 81);
-    }
-
-    // Title
+    if (rfq.family) doc.text(`Família: ${rfq.family}`, 10, 81);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.text(`Assunto: ${rfq.title}`, 10, 90);
 
-    // Items Table
     autoTable(doc, {
       startY: 100,
       head: [['Item', 'Descrição', 'Quantidade', 'Unidade']],
@@ -252,20 +238,13 @@ export default function RFQList() {
       alternateRowStyles: { fillColor: [245, 245, 245] },
     });
 
-    // Footer
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
-      doc.text(
-        `Página ${i} de ${pageCount} - Gerado por SupplyFlow`,
-        105,
-        285,
-        { align: 'center' }
-      );
+      doc.text(`Página ${i} de ${pageCount} - Gerado por SupplyFlow`, 105, 285, { align: 'center' });
     }
-
     doc.save(`RFQ_${rfq.number}.pdf`);
   };
 
@@ -282,10 +261,10 @@ export default function RFQList() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-600';
-      case 'sent': return 'bg-blue-100 text-blue-600';
-      case 'closed': return 'bg-green-100 text-green-600';
-      default: return 'bg-gray-100 text-gray-600';
+      case 'draft': return 'bg-slate-100 text-slate-600';
+      case 'sent': return 'bg-brand-50 text-brand-600';
+      case 'closed': return 'bg-emerald-50 text-emerald-600';
+      default: return 'bg-slate-100 text-slate-600';
     }
   };
 
@@ -298,20 +277,28 @@ export default function RFQList() {
     }
   };
 
+  const filteredRfqs = rfqs.filter(rfq => 
+    rfq.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    rfq.number.toString().includes(searchTerm)
+  );
+
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-12">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Cotações (RFQ)</h2>
-          <p className="text-[#8E9299] mt-1">Solicite propostas e gerencie negociações.</p>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900">Cotações (RFQ)</h2>
+          <p className="text-slate-500 mt-2 text-lg font-medium">Solicite propostas estratégicas e gerencie negociações.</p>
         </div>
-        <button 
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+          className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 transition-all duration-300 self-start"
         >
           <Plus size={20} />
-          <span>Nova Cotação</span>
-        </button>
+          <span>Nova Solicitação</span>
+        </motion.button>
       </div>
 
       <RFQModal 
@@ -354,129 +341,152 @@ export default function RFQList() {
         />
       )}
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+      {/* Filters Bar */}
+      <div className="bg-white p-3 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input 
             type="text" 
-            placeholder="Buscar por número ou título..." 
-            className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#141414]"
+            placeholder="Buscar por número ou título da cotação..." 
+            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#141414] bg-white border border-[#E5E5E5] rounded-lg hover:bg-[#F5F5F5] transition-colors">
+        <button className="flex items-center gap-2 px-6 py-4 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all duration-300">
           <Filter size={18} />
-          <span>Filtros</span>
+          <span>Filtros Avançados</span>
         </button>
       </div>
 
-      {/* RFQ List */}
-      <div className="bg-white rounded-3xl border border-[#E5E5E5] overflow-hidden">
+      {/* RFQ List Container */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#141414]"></div>
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 border-4 border-slate-200 rounded-full" />
+              <div className="absolute inset-0 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
           </div>
-        ) : rfqs.length === 0 ? (
-          <div className="p-12 text-center">
-            <FileText size={48} className="mx-auto text-[#E5E5E5] mb-4" />
-            <h3 className="text-lg font-bold text-[#141414]">Nenhuma cotação encontrada</h3>
-            <p className="text-[#8E9299] mt-1">Clique em "Nova Cotação" para começar.</p>
+        ) : filteredRfqs.length === 0 ? (
+          <div className="p-20 text-center">
+            <div className="w-20 h-20 bg-slate-50 rounded-[1.5rem] flex items-center justify-center mx-auto mb-6">
+              <FileText size={32} className="text-slate-300" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Nenhuma cotação encontrada</h3>
+            <p className="text-slate-500 mt-2 font-medium">Inicie um novo processo de cotação para gerenciar seus suprimentos.</p>
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F5F5F5] border-b border-[#E5E5E5]">
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Número</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Título</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Status</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Data Desejada</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Itens</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5E5E5]">
-              {rfqs.map((rfq) => (
-                <tr 
-                  key={rfq.id} 
-                  onClick={() => setSelectedRFQ(rfq)}
-                  className="hover:bg-[#F5F5F5] transition-colors group cursor-pointer"
-                >
-                  <td className="px-6 py-6 font-mono text-sm font-bold text-[#141414]">#{rfq.number}</td>
-                  <td className="px-6 py-6">
-                    <p className="text-sm font-bold text-[#141414]">{rfq.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-[10px] text-[#8E9299] font-medium">Criado em {new Date(rfq.createdAt).toLocaleDateString()}</p>
-                      {rfq.family && (
-                        <div className="flex items-center gap-1 bg-[#F5F5F5] px-2 py-0.5 rounded text-[9px] font-bold text-[#8E9299] uppercase tracking-tighter">
-                          <Tag size={10} />
-                          <span>{rfq.family}</span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-6">
-                    <div className={cn("inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest", getStatusColor(rfq.status))}>
-                      {getStatusIcon(rfq.status)}
-                      <span>{rfq.status}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-6">
-                    <div className="flex items-center gap-2 text-sm text-[#141414]">
-                      <Calendar size={16} className="text-[#8E9299]" />
-                      <span>{new Date(rfq.desiredDate).toLocaleDateString()}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-6">
-                    <span className="text-xs font-bold text-[#141414] bg-[#F5F5F5] px-2 py-1 rounded-md">
-                      {rfq.items.length} Itens
-                    </span>
-                  </td>
-                  <td className="px-6 py-6">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRfqToSendEmail({ id: rfq.id, number: rfq.number, family: rfq.family || '' });
-                        }}
-                        className={cn(
-                          "p-2 rounded-full transition-all",
-                          rfq.status === 'sent' 
-                            ? "text-green-600 bg-green-50" 
-                            : "text-blue-600 bg-blue-50 hover:bg-blue-100"
-                        )}
-                        title={rfq.status === 'sent' ? "Reenviar para Fornecedores" : "Disparar para Fornecedores"}
-                      >
-                        <Mail size={18} />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleGeneratePDF(rfq).catch(err => console.error('Error in handleGeneratePDF:', err));
-                        }}
-                        className="p-2 text-[#8E9299] hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                        title="Gerar PDF"
-                      >
-                        <FileText size={18} />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRfqToDelete({ id: rfq.id, number: rfq.number });
-                        }}
-                        className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
-                        title="Excluir"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                      <ChevronRight size={18} className="text-[#E5E5E5] group-hover:text-[#141414] transition-colors" />
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100">
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Número</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Título & Categoria</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Status</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Data Desejada</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Itens</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 text-right">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredRfqs.map((rfq, idx) => (
+                  <motion.tr 
+                    key={rfq.id} 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    onClick={() => setSelectedRFQ(rfq)}
+                    className="hover:bg-slate-50/50 transition-all duration-300 group cursor-pointer"
+                  >
+                    <td className="px-8 py-6">
+                      <span className="font-mono text-sm font-bold text-slate-900 bg-slate-100 px-3 py-1.5 rounded-lg group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
+                        #{rfq.number}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <p className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{rfq.title}</p>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Criado em {new Date(rfq.createdAt).toLocaleDateString()}</p>
+                        {rfq.family && (
+                          <div className="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-slate-500 uppercase tracking-widest group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors">
+                            <Tag size={10} />
+                            <span>{rfq.family}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className={cn("inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent", getStatusColor(rfq.status))}>
+                        {getStatusIcon(rfq.status)}
+                        <span>{rfq.status}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-2.5 text-sm font-bold text-slate-700">
+                        <Calendar size={16} className="text-slate-300" />
+                        <span>{new Date(rfq.desiredDate).toLocaleDateString()}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+                        {rfq.items.length} {rfq.items.length === 1 ? 'Item' : 'Itens'}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center justify-end gap-2">
+                        <motion.button 
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRfqToSendEmail({ id: rfq.id, number: rfq.number, family: rfq.family || '' });
+                          }}
+                          className={cn(
+                            "p-3 rounded-2xl transition-all duration-300",
+                            rfq.status === 'sent' 
+                              ? "text-emerald-600 bg-emerald-50" 
+                              : "text-brand-600 bg-brand-50 hover:bg-brand-100"
+                          )}
+                          title={rfq.status === 'sent' ? "Reenviar para Fornecedores" : "Disparar para Fornecedores"}
+                        >
+                          <Send size={18} />
+                        </motion.button>
+                        <motion.button 
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGeneratePDF(rfq).catch(err => console.error('Error in handleGeneratePDF:', err));
+                          }}
+                          className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all duration-300"
+                          title="Gerar PDF"
+                        >
+                          <Download size={18} />
+                        </motion.button>
+                        <motion.button 
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRfqToDelete({ id: rfq.id, number: rfq.number });
+                          }}
+                          className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all duration-300"
+                          title="Excluir"
+                        >
+                          <Trash2 size={18} />
+                        </motion.button>
+                        <ChevronRight size={20} className="text-slate-200 group-hover:text-brand-500 group-hover:translate-x-1 transition-all ml-2" />
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
   );
 }
+

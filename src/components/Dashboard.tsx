@@ -9,20 +9,23 @@ import {
   ResponsiveContainer, 
   PieChart, 
   Pie, 
-  Cell 
+  Cell,
+  AreaChart,
+  Area
 } from 'recharts';
-import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight, FileText } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight, FileText, Users, ShoppingBag, Target, Calendar } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { PurchaseOrder, RFQ, Supplier, Proposal } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { motion } from 'motion/react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const COLORS = ['#141414', '#8E9299', '#E5E5E5', '#F5F5F5'];
+const COLORS = ['#0052FF', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function Dashboard() {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
@@ -54,7 +57,14 @@ export default function Dashboard() {
     });
 
     const unsubscribeRFQs = onSnapshot(collection(db, 'rfqs'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as RFQ[];
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return { 
+          ...d, 
+          id: doc.id,
+          createdAt: d.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        };
+      }) as RFQ[];
       setRfqs(data);
     }, (error) => {
       try {
@@ -65,7 +75,14 @@ export default function Dashboard() {
     });
 
     const unsubscribeProposals = onSnapshot(collection(db, 'proposals'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Proposal[];
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return { 
+          ...d, 
+          id: doc.id,
+          createdAt: d.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        };
+      }) as Proposal[];
       setProposals(data);
     }, (error) => {
       try {
@@ -114,47 +131,46 @@ export default function Dashboard() {
   });
 
   // Calculate KPIs
-  const totalSpent = filteredPOs.reduce((acc, po) => acc + po.totalAmount, 0);
+  const totalSpent = filteredPOs.reduce((acc, po) => acc + (po.totalAmount || 0), 0);
   
-  // Total Savings: difference between highest and accepted proposal for each RFQ
   const totalSavings = filteredRFQs.reduce((acc, rfq) => {
     const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
     const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
     if (acceptedProposal && rfqProposals.length >= 2) {
-      const prices = rfqProposals.map(p => p.totalValue);
-      const maxPrice = Math.max(...prices);
-      return acc + (maxPrice - acceptedProposal.totalValue);
+      const prices = rfqProposals.map(p => p.totalValue).filter(v => typeof v === 'number' && !isNaN(v));
+      if (prices.length >= 2) {
+        const maxPrice = Math.max(...prices);
+        const savings = maxPrice - (acceptedProposal.totalValue || 0);
+        return acc + (isNaN(savings) ? 0 : Math.max(0, savings));
+      }
     }
     return acc;
   }, 0);
 
-  const openPOsAmount = filteredPOs.filter(po => po.status !== 'received' && po.status !== 'closed')
-                           .reduce((acc, po) => acc + (po.totalAmount - po.receivedAmount), 0);
   const openPOsCount = filteredPOs.filter(po => po.status !== 'received' && po.status !== 'closed').length;
   
-  // Calculate Average Approval Time (in hours)
   const approvedPOs = filteredPOs.filter(po => po.approvedAt && po.createdAt);
   const totalApprovalTime = approvedPOs.reduce((acc, po) => {
     const start = new Date(po.createdAt).getTime();
     const end = new Date(po.approvedAt!).getTime();
+    if (isNaN(start) || isNaN(end)) return acc;
     return acc + (end - start);
   }, 0);
   const avgApprovalTimeHours = approvedPOs.length > 0 
     ? (totalApprovalTime / approvedPOs.length / (1000 * 60 * 60)).toFixed(1) 
     : '0';
 
-  // Calculate Average Lead Time (in days)
   const receivedPOs = filteredPOs.filter(po => po.receivedAt && po.createdAt);
   const totalLeadTime = receivedPOs.reduce((acc, po) => {
     const start = new Date(po.createdAt).getTime();
     const end = new Date(po.receivedAt!).getTime();
+    if (isNaN(start) || isNaN(end)) return acc;
     return acc + (end - start);
   }, 0);
   const avgLeadTimeDays = receivedPOs.length > 0 
     ? (totalLeadTime / receivedPOs.length / (1000 * 60 * 60 * 24)).toFixed(1) 
     : '0';
 
-  // Calculate Overall Accuracy (Average of all suppliers' accuracy)
   const suppliersWithAccuracy = suppliers.filter(s => s.accuracy !== undefined);
   const overallAccuracy = suppliersWithAccuracy.length > 0
     ? (suppliersWithAccuracy.reduce((acc, s) => acc + (s.accuracy || 0), 0) / suppliersWithAccuracy.length).toFixed(1)
@@ -168,7 +184,6 @@ export default function Dashboard() {
     return 'Crítico';
   };
 
-  // Top Suppliers Ranking
   const supplierSpend: Record<string, { name: string, total: number }> = {};
   filteredPOs.forEach(po => {
     if (!supplierSpend[po.supplierId]) {
@@ -180,11 +195,8 @@ export default function Dashboard() {
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-  // Spend by Family
   const familySpend: Record<string, number> = {};
   filteredPOs.forEach(po => {
-    // We assume each PO belongs to a family based on the supplier's primary family or items
-    // For simplicity, let's use the first family of the supplier if available
     const supplier = suppliers.find(s => s.id === po.supplierId);
     const family = supplier?.families[0] || 'Outros';
     familySpend[family] = (familySpend[family] || 0) + po.totalAmount;
@@ -199,7 +211,6 @@ export default function Dashboard() {
     pieData.push({ name: 'Sem Dados', value: 1 });
   }
 
-  // Calculate 12-month history dynamically
   const getLast12Months = () => {
     const months = [];
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -229,13 +240,13 @@ export default function Dashboard() {
     );
     
     if (monthIndex !== -1) {
-      monthlyHistory[monthIndex].spend += po.totalAmount;
+      monthlyHistory[monthIndex].spend += (po.totalAmount || 0);
     }
   });
 
   rfqs.forEach(rfq => {
     const rfqDate = rfq.createdAt ? new Date(rfq.createdAt) : null;
-    if (!rfqDate) return;
+    if (!rfqDate || isNaN(rfqDate.getTime())) return;
 
     const monthIndex = monthlyHistory.findIndex(m => 
       m.month === rfqDate.getMonth() && m.year === rfqDate.getFullYear()
@@ -245,297 +256,363 @@ export default function Dashboard() {
       const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
       const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
       if (acceptedProposal && rfqProposals.length >= 2) {
-        const prices = rfqProposals.map(p => p.totalValue);
-        const maxPrice = Math.max(...prices);
-        monthlyHistory[monthIndex].savings += (maxPrice - acceptedProposal.totalValue);
+        const prices = rfqProposals.map(p => p.totalValue).filter(v => typeof v === 'number' && !isNaN(v));
+        if (prices.length >= 2) {
+          const maxPrice = Math.max(...prices);
+          const savings = maxPrice - (acceptedProposal.totalValue || 0);
+          if (!isNaN(savings)) {
+            monthlyHistory[monthIndex].savings += Math.max(0, savings);
+          }
+        }
       }
     }
   });
 
-  const monthlySpendData = monthlyHistory.map(m => ({ name: m.name, value: m.spend }));
-  const monthlySavingsData = monthlyHistory.map(m => ({ name: m.name, value: m.savings }));
+  const monthlyData = monthlyHistory.map(m => ({ 
+    name: m.name, 
+    spend: m.spend,
+    savings: m.savings
+  }));
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#141414]"></div>
+        <div className="relative w-12 h-12">
+          <div className="absolute inset-0 border-4 border-slate-200 rounded-full" />
+          <div className="absolute inset-0 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
+  const kpis = [
+    { 
+      label: 'Total de Economia', 
+      value: `R$ ${totalSavings.toLocaleString()}`, 
+      icon: Target, 
+      color: 'brand',
+      trend: '+12.5%',
+      trendUp: true
+    },
+    { 
+      label: 'Gasto Total', 
+      value: `R$ ${totalSpent.toLocaleString()}`, 
+      icon: ShoppingBag, 
+      color: 'brand',
+      trend: `${openPOsCount} Ativas`,
+      trendUp: null
+    },
+    { 
+      label: 'Aprovação Média', 
+      value: `${avgApprovalTimeHours}h`, 
+      icon: Clock, 
+      color: 'sky',
+      trend: '-2.4h',
+      trendUp: true
+    },
+    { 
+      label: 'Lead Time Médio', 
+      value: `${avgLeadTimeDays} dias`, 
+      icon: Calendar, 
+      color: 'amber',
+      trend: '-0.5d',
+      trendUp: true
+    },
+    { 
+      label: 'Acuracidade', 
+      value: `${overallAccuracy}%`, 
+      icon: CheckCircle2, 
+      color: 'violet',
+      trend: getAccuracyLabel(overallAccuracy),
+      trendUp: parseFloat(overallAccuracy) >= 75
+    },
+  ];
+
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-12">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Dashboard</h2>
-          <p className="text-[#8E9299] mt-1">Visão geral da performance de compras e fornecedores.</p>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900">Dashboard Executivo</h2>
+          <p className="text-slate-500 mt-2 text-lg font-medium">Análise estratégica de suprimentos e performance de rede.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <select 
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(Number(e.target.value))}
-              className="appearance-none flex items-center gap-2 text-sm font-medium text-[#141414] bg-white pl-10 pr-8 py-2 rounded-full border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#141414] cursor-pointer transition-all"
+        <div className="flex items-center gap-4 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm self-start">
+          {[30, 90, 180, 365, 0].map((period) => (
+            <button
+              key={period}
+              onClick={() => setSelectedPeriod(period)}
+              className={cn(
+                "px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300",
+                selectedPeriod === period 
+                  ? "bg-slate-900 text-white shadow-lg" 
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              )}
             >
-              <option value={30}>Últimos 30 dias</option>
-              <option value={90}>Últimos 3 meses</option>
-              <option value={180}>Últimos 6 meses</option>
-              <option value={365}>Últimos 12 meses</option>
-              <option value={0}>Todo o período</option>
-            </select>
-            <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 1L5 5L9 1" stroke="#8E9299" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-2 bg-[#F5F5F5] rounded-lg">
-              <TrendingUp className="text-[#141414]" size={20} />
-            </div>
-            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">Economia</span>
-          </div>
-          <h3 className="text-[#8E9299] text-xs font-bold uppercase tracking-widest mt-4">Total de Economia</h3>
-          <p className="text-2xl font-bold text-[#141414] mt-1">R$ {totalSavings.toLocaleString()}</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-2 bg-[#F5F5F5] rounded-lg">
-              <FileText className="text-[#141414]" size={20} />
-            </div>
-            <span className="text-[10px] font-bold text-[#141414] bg-[#F5F5F5] px-2 py-1 rounded-full">{openPOsCount} Ativas</span>
-          </div>
-          <h3 className="text-[#8E9299] text-xs font-bold uppercase tracking-widest mt-4">Gasto Total</h3>
-          <p className="text-2xl font-bold text-[#141414] mt-1">R$ {totalSpent.toLocaleString()}</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-2 bg-[#F5F5F5] rounded-lg">
-              <Clock className="text-[#141414]" size={20} />
-            </div>
-            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Eficiência</span>
-          </div>
-          <h3 className="text-[#8E9299] text-xs font-bold uppercase tracking-widest mt-4">Tempo Médio Aprovação</h3>
-          <p className="text-2xl font-bold text-[#141414] mt-1">{avgApprovalTimeHours} h</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-2 bg-[#F5F5F5] rounded-lg">
-              <Clock className="text-[#141414]" size={20} />
-            </div>
-            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">Lead Time</span>
-          </div>
-          <h3 className="text-[#8E9299] text-xs font-bold uppercase tracking-widest mt-4">Lead Time Médio</h3>
-          <p className="text-2xl font-bold text-[#141414] mt-1">{avgLeadTimeDays} dias</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div className="p-2 bg-[#F5F5F5] rounded-lg">
-              <CheckCircle2 className="text-[#141414]" size={20} />
-            </div>
-            <span className={cn(
-              "text-[10px] font-bold px-2 py-1 rounded-full",
-              parseFloat(overallAccuracy) >= 75 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
-            )}>
-              {overallAccuracy}%
-            </span>
-          </div>
-          <h3 className="text-[#8E9299] text-xs font-bold uppercase tracking-widest mt-4">Acuracidade</h3>
-          <p className="text-2xl font-bold text-[#141414] mt-1">{getAccuracyLabel(overallAccuracy)}</p>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-3xl border border-[#E5E5E5]">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold text-[#141414]">Gasto Mensal</h3>
-            <button className="text-[#8E9299] hover:text-[#141414] transition-colors">
-              <ArrowUpRight size={20} />
+              {period === 0 ? 'Tudo' : `${period} Dias`}
             </button>
+          ))}
+        </div>
+      </div>
+
+      {/* KPI Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {kpis.map((kpi, idx) => (
+          <motion.div
+            key={kpi.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-500 group"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className={cn(
+                "p-3 rounded-2xl transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3",
+                kpi.color === 'emerald' && "bg-emerald-50 text-emerald-600",
+                kpi.color === 'brand' && "bg-brand-50 text-brand-600",
+                kpi.color === 'sky' && "bg-sky-50 text-sky-600",
+                kpi.color === 'amber' && "bg-amber-50 text-amber-600",
+                kpi.color === 'violet' && "bg-violet-50 text-violet-600",
+              )}>
+                <kpi.icon size={24} />
+              </div>
+              {kpi.trend && (
+                <span className={cn(
+                  "text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider",
+                  kpi.trendUp === true && "text-emerald-600 bg-emerald-50",
+                  kpi.trendUp === false && "text-rose-600 bg-rose-50",
+                  kpi.trendUp === null && "text-slate-500 bg-slate-50"
+                )}>
+                  {kpi.trend}
+                </span>
+              )}
+            </div>
+            <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">{kpi.label}</h3>
+            <p className="text-2xl font-bold text-slate-900 tracking-tight">{kpi.value}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Main Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Monthly Performance Chart */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.5 }}
+          className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Performance Mensal</h3>
+              <p className="text-sm text-slate-500 mt-1">Comparativo de gastos e economia gerada.</p>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-brand-500" />
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gastos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Economia</span>
+              </div>
+            </div>
           </div>
-          <div className="h-[300px] w-full">
+          <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlySpendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
+              <AreaChart data={monthlyData}>
+                <defs>
+                  <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0052FF" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#0052FF" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#8E9299', fontSize: 10 }} 
-                  interval={0}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} 
+                  dy={10}
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#8E9299', fontSize: 12 }}
-                  tickFormatter={(value) => `R$ ${value}`}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
+                  tickFormatter={(value) => `R$ ${value / 1000}k`}
                 />
                 <Tooltip 
-                  cursor={{ fill: '#F5F5F5' }}
                   contentStyle={{ 
-                    backgroundColor: '#141414', 
+                    backgroundColor: '#0f172a', 
                     border: 'none', 
-                    borderRadius: '8px',
-                    color: '#fff'
+                    borderRadius: '16px',
+                    color: '#fff',
+                    padding: '12px 16px',
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
                   }}
-                  itemStyle={{ color: '#fff' }}
+                  itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                 />
-                <Bar dataKey="value" fill="#141414" radius={[4, 4, 0, 0]} barSize={20} />
-              </BarChart>
+                <Area 
+                  type="monotone" 
+                  dataKey="spend" 
+                  stroke="#0052FF" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorSpend)" 
+                />
+                <Bar 
+                  dataKey="savings" 
+                  fill="#3b82f6" 
+                  radius={[4, 4, 0, 0]} 
+                  barSize={12} 
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white p-8 rounded-3xl border border-[#E5E5E5]">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold text-[#141414]">Economia Gerada por Mês</h3>
-            <button className="text-[#8E9299] hover:text-[#141414] transition-colors">
-              <ArrowUpRight size={20} />
-            </button>
-          </div>
-          <div className="h-[300px] w-full">
+        {/* Family Distribution Chart */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.6 }}
+          className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm"
+        >
+          <h3 className="text-xl font-bold text-slate-900 mb-2">Gastos por Família</h3>
+          <p className="text-sm text-slate-500 mb-8">Distribuição percentual por categoria.</p>
+          <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlySavingsData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#8E9299', fontSize: 10 }} 
-                  interval={0}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#8E9299', fontSize: 12 }}
-                  tickFormatter={(value) => `R$ ${value}`}
-                />
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={70}
+                  outerRadius={100}
+                  paddingAngle={8}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip 
-                  cursor={{ fill: '#F5F5F5' }}
-                  contentStyle={{ 
-                    backgroundColor: '#141414', 
-                    border: 'none', 
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  itemStyle={{ color: '#fff' }}
+                  formatter={(value: number) => `R$ ${value.toLocaleString()}`}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                 />
-                <Bar dataKey="value" fill="#8E9299" radius={[4, 4, 0, 0]} barSize={20} />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-3xl border border-[#E5E5E5] lg:col-span-2">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold text-[#141414]">Distribuição de Gastos por Família</h3>
-            <button className="text-[#8E9299] hover:text-[#141414] transition-colors">
-              <ArrowUpRight size={20} />
-            </button>
-          </div>
-          <div className="h-[300px] w-full flex flex-col md:flex-row items-center justify-around">
-            <div className="h-full w-full md:w-1/2">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => `R$ ${value.toLocaleString()}`}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3 mt-4 md:mt-0">
-              {pieData.map((item, index) => (
-                <div key={`${item.name}-${index}`} className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-[#141414]">{item.name}</span>
-                    <span className="text-[10px] text-[#8E9299]">R$ {item.value.toLocaleString()}</span>
-                  </div>
+          <div className="space-y-3 mt-6">
+            {pieData.map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between group">
+                <div className="flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 transition-colors">{item.name}</span>
                 </div>
-              ))}
-            </div>
+                <span className="text-xs font-mono font-bold text-slate-400">R$ {item.value.toLocaleString()}</span>
+              </div>
+            ))}
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Ranking and Alerts */}
+      {/* Bottom Grid: Suppliers and Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-3xl border border-[#E5E5E5] overflow-hidden">
-          <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-            <h3 className="text-lg font-bold text-[#141414]">Ranking Principais Fornecedores</h3>
-            <span className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Por Volume de Compra</span>
+        {/* Top Suppliers */}
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.7 }}
+          className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm"
+        >
+          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Top Fornecedores</h3>
+              <p className="text-xs text-slate-500 mt-1">Ranking por volume transacionado.</p>
+            </div>
+            <Users className="text-slate-300" size={24} />
           </div>
-          <div className="divide-y divide-[#E5E5E5]">
+          <div className="divide-y divide-slate-50">
             {topSuppliers.map((s, index) => (
-              <div key={`${s.name}-${index}`} className="p-6 flex items-center justify-between hover:bg-[#F5F5F5] transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 rounded-full bg-[#141414] text-white flex items-center justify-center text-xs font-bold">
+              <div key={s.name} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-all duration-300 group">
+                <div className="flex items-center gap-5">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center text-sm font-bold group-hover:bg-brand-500 group-hover:text-white transition-all duration-500">
                     {index + 1}
                   </div>
-                  <span className="text-sm font-bold text-[#141414]">{s.name}</span>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{s.name}</p>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mt-0.5">Volume de Compra</p>
+                  </div>
                 </div>
-                <span className="text-sm font-bold text-[#141414]">R$ {s.total.toLocaleString()}</span>
+                <div className="text-right">
+                  <p className="text-sm font-mono font-bold text-slate-900">R$ {s.total.toLocaleString()}</p>
+                  <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                    <div 
+                      className="h-full bg-brand-500 rounded-full" 
+                      style={{ width: `${(s.total / topSuppliers[0].total) * 100}%` }} 
+                    />
+                  </div>
+                </div>
               </div>
             ))}
             {topSuppliers.length === 0 && (
-              <div className="p-6 text-center text-[#8E9299] text-sm">
-                Nenhum dado disponível.
+              <div className="p-12 text-center text-slate-400 text-sm font-medium italic">
+                Nenhum dado disponível para o período.
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white rounded-3xl border border-[#E5E5E5] overflow-hidden">
-          <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-            <h3 className="text-lg font-bold text-[#141414]">Alertas e Prazos</h3>
-            <span className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">{rfqs.length} RFQs Ativas</span>
+        {/* Active Alerts */}
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.8 }}
+          className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm"
+        >
+          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Alertas Críticos</h3>
+              <p className="text-xs text-slate-500 mt-1">Acompanhamento de RFQs e prazos.</p>
+            </div>
+            <div className="px-3 py-1 bg-brand-50 text-brand-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+              {rfqs.length} Ativas
+            </div>
           </div>
-          <div className="divide-y divide-[#E5E5E5]">
-            {rfqs.slice(0, 3).map(rfq => (
-              <div key={rfq.id} className="p-6 flex items-start gap-4 hover:bg-[#F5F5F5] transition-colors cursor-pointer">
-                <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
+          <div className="divide-y divide-slate-50">
+            {rfqs.slice(0, 5).map(rfq => (
+              <div key={rfq.id} className="p-6 flex items-start gap-5 hover:bg-slate-50 transition-all duration-300 cursor-pointer group">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform">
                   <Clock size={20} />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-[#141414]">RFQ #{rfq.number} - {rfq.title}</p>
-                  <p className="text-xs text-[#8E9299] mt-1">Vence em {new Date(rfq.desiredDate).toLocaleDateString()}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-bold text-slate-900 truncate">RFQ #{rfq.number} — {rfq.title}</p>
+                    <ArrowUpRight size={14} className="text-slate-300 group-hover:text-brand-500 transition-colors" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                      <Calendar size={12} />
+                      Vence em {new Date(rfq.desiredDate).toLocaleDateString()}
+                    </p>
+                    <span className="w-1 h-1 rounded-full bg-slate-300" />
+                    <p className="text-[10px] font-bold text-brand-600 uppercase tracking-widest">Aguardando Propostas</p>
+                  </div>
                 </div>
-                <span className="text-[10px] font-bold text-[#8E9299] uppercase">Ativa</span>
               </div>
             ))}
             {rfqs.length === 0 && (
-              <div className="p-6 text-center text-[#8E9299] text-sm">
-                Nenhum alerta no momento.
+              <div className="p-12 text-center text-slate-400 text-sm font-medium italic">
+                Nenhum alerta crítico no momento.
               </div>
             )}
           </div>
-        </div>
+          <div className="p-6 bg-slate-50/50 border-t border-slate-100 text-center">
+            <button className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-[0.2em]">Ver Todas as Cotações</button>
+          </div>
+        </motion.div>
       </div>
     </div>
   );
 }
+

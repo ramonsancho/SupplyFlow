@@ -71,8 +71,12 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-[#141414] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 border-4 border-slate-200 rounded-full" />
+          <div className="absolute inset-0 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <p className="text-slate-500 font-medium animate-pulse">Carregando SupplyFlow...</p>
       </div>
     );
   }

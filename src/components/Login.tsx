@@ -8,7 +8,9 @@ import {
   ArrowRight,
   UserPlus,
   Eye,
-  EyeOff
+  EyeOff,
+  ShieldCheck,
+  Building2
 } from 'lucide-react';
 import { 
   auth, 
@@ -32,6 +34,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function Login() {
   const [isFirstAccess, setIsFirstAccess] = useState(false);
@@ -50,14 +53,11 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Verificar status do usuário no Firestore
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        
-        // Garantir que administradores bootstrap tenham o papel correto
         const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
         if (bootstrapEmails.includes(user.email?.toLowerCase().trim() || '') && userData.role !== 'Administrador') {
           await setDoc(userRef, { ...userData, role: 'Administrador' }, { merge: true });
@@ -70,8 +70,6 @@ export default function Login() {
           return;
         }
       } else {
-        // Caso o usuário exista no Auth mas não no Firestore (raro, mas possível)
-        // Verificar se ele está autorizado por email
         const q = query(collection(db, 'users'), where('email', '==', email));
         const querySnapshot = await getDocs(q);
         
@@ -83,15 +81,12 @@ export default function Login() {
         }
 
         const authData = querySnapshot.docs[0].data();
-        
-        // Vincular o UID ao documento do Firestore se ainda não estiver
         await setDoc(doc(db, 'users', user.uid), {
           ...authData,
           uid: user.uid,
           updatedAt: serverTimestamp()
         });
 
-        // Deletar o documento antigo se o ID for diferente do UID
         if (querySnapshot.docs[0].id !== user.uid) {
           await deleteDoc(doc(db, 'users', querySnapshot.docs[0].id));
         }
@@ -108,7 +103,7 @@ export default function Login() {
     } catch (error: any) {
       let message = 'Erro ao realizar login. Verifique suas credenciais.';
       if (error.code === 'auth/operation-not-allowed') {
-        message = 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.';
+        message = 'O provedor de E-mail/Senha não está ativado no Firebase Console.';
       } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         message = 'Email ou senha incorretos.';
       }
@@ -120,12 +115,10 @@ export default function Login() {
 
   const handleFirstAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (password !== confirmPassword) {
       addNotification('Erro', 'As senhas não coincidem.', 'error');
       return;
     }
-
     if (password.length < 6) {
       addNotification('Erro', 'A senha deve ter pelo menos 6 caracteres.', 'error');
       return;
@@ -133,39 +126,29 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      // 1. Criar o usuário no Firebase Auth primeiro para estarmos autenticados
-      // Isso permite que as regras do Firestore funcionem (allow read: if isAuthenticated())
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       const uid = user.uid;
 
-      // 2. Agora autenticados, verificar se o email está cadastrado na coleção 'users'
       const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
       const querySnapshot = await getDocs(q);
 
-      // Bootstrap emails
       const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
       const isBootstrap = bootstrapEmails.includes(email.toLowerCase().trim());
 
       if (querySnapshot.empty && !isBootstrap) {
-        // Se não autorizado, deletamos o usuário do Auth e deslogamos
         await user.delete();
         await signOut(auth);
-        addNotification('Acesso Negado', 'Este email não está autorizado no sistema. Entre em contato com o administrador.', 'error');
+        addNotification('Acesso Negado', 'Este email não está autorizado no sistema.', 'error');
         setIsLoading(false);
         return;
       }
 
-      // 3. Vincular o UID ao documento do Firestore
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
-        
-        // Garantir que createdAt seja um Timestamp se for string
         let createdAt = userData.createdAt;
-        if (typeof createdAt === 'string') {
-          createdAt = new Date(createdAt);
-        }
+        if (typeof createdAt === 'string') createdAt = new Date(createdAt);
         
         await setDoc(doc(db, 'users', uid), {
           ...userData,
@@ -174,12 +157,8 @@ export default function Login() {
           updatedAt: serverTimestamp()
         });
 
-        // Deletar o documento antigo (que tinha ID aleatório ou temporário)
-        if (userDoc.id !== uid) {
-          await deleteDoc(doc(db, 'users', userDoc.id));
-        }
+        if (userDoc.id !== uid) await deleteDoc(doc(db, 'users', userDoc.id));
       } else {
-        // Criar novo documento para o bootstrap
         const isRamon = email.toLowerCase().trim() === "ramon.souza@oeg.group";
         await setDoc(doc(db, 'users', uid), {
           name: isRamon ? "Ramon Souza" : email.split('@')[0],
@@ -197,18 +176,10 @@ export default function Login() {
     } catch (error: any) {
       console.error('First access error details:', error);
       let message = 'Erro ao configurar primeiro acesso.';
-      
-      // Se for erro de permissão, dar uma dica mais clara
       if (error.code === 'auth/operation-not-allowed') {
-        message = 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.';
-      } else if (error.message && error.message.includes('insufficient permissions')) {
-        message = 'Erro de permissão no banco de dados. Verifique se seu email está autorizado.';
+        message = 'O provedor de E-mail/Senha não está ativado no Firebase Console.';
       } else if (error.code === 'auth/email-already-in-use') {
-        message = 'Este usuário já possui uma senha configurada. Tente fazer login.';
-      } else if (error.code === 'auth/weak-password') {
-        message = 'A senha deve ter pelo menos 6 caracteres.';
-      } else if (error.code === 'auth/invalid-email') {
-        message = 'Email inválido.';
+        message = 'Este usuário já possui uma senha configurada.';
       } else if (error.message) {
         message = error.message;
       }
@@ -225,39 +196,88 @@ export default function Login() {
     }
     try {
       await sendPasswordResetEmail(auth, email);
-      addNotification('Email Enviado', 'Verifique sua caixa de entrada para resetar a senha.', 'info');
+      addNotification('Email Enviado', 'Verifique sua caixa de entrada.', 'info');
     } catch (error: any) {
       addNotification('Erro', 'Erro ao enviar email de recuperação.', 'error');
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-[40px] shadow-2xl border border-[#E5E5E5] overflow-hidden">
-        <div className="p-10">
-          <div className="flex flex-col items-center mb-10">
-            <div className="flex items-center gap-3 mb-2">
-              <img 
-                src="https://i.ibb.co/PvHCyFtf/logo.png" 
-                alt="SupplyFlow Logo" 
-                className="w-12 h-12 rounded-2xl object-cover shadow-lg"
-                referrerPolicy="no-referrer"
-              />
-              <h1 className="text-3xl font-bold text-[#141414] tracking-tight">SupplyFlow</h1>
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-500/20 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-600/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="w-full max-w-[1000px] grid lg:grid-cols-2 bg-white rounded-[3rem] shadow-2xl overflow-hidden relative z-10"
+      >
+        {/* Left Side: Branding & Info */}
+        <div className="hidden lg:flex flex-col justify-between p-12 bg-slate-900 text-white relative">
+          <div className="absolute inset-0 opacity-10 pointer-events-none">
+            <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:20px_20px]" />
+          </div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 mb-12">
+              <div className="w-12 h-12 bg-brand-500 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20">
+                <Building2 className="text-white" size={24} />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">SupplyFlow</h1>
             </div>
-            <p className="text-[#8E9299] font-medium uppercase tracking-[0.2em] text-[10px]">Gestão de Suprimentos</p>
+            
+            <div className="space-y-8">
+              <h2 className="text-4xl font-bold leading-tight tracking-tight">
+                Gestão Inteligente de <span className="text-brand-500">Suprimentos</span> para sua Empresa.
+              </h2>
+              <p className="text-slate-400 text-lg leading-relaxed">
+                Otimize seus processos de compra, gerencie fornecedores e acompanhe cotações em tempo real com nossa plataforma integrada.
+              </p>
+            </div>
           </div>
 
-          <div className="flex bg-[#F5F5F5] p-1 rounded-2xl mb-8">
+          <div className="relative z-10 space-y-6">
+            <div className="flex items-center gap-4 text-slate-400">
+              <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center">
+                <ShieldCheck size={20} className="text-brand-500" />
+              </div>
+              <p className="text-sm font-medium">Ambiente seguro e auditado</p>
+            </div>
+            <p className="text-[10px] text-slate-500 uppercase tracking-[0.3em] font-bold">SupplyFlow Enterprise v1.2.0</p>
+          </div>
+        </div>
+
+        {/* Right Side: Form */}
+        <div className="p-8 lg:p-16 bg-white">
+          <div className="flex flex-col items-center lg:items-start mb-10">
+            <div className="lg:hidden flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
+                <Building2 className="text-white" size={20} />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900">SupplyFlow</h1>
+            </div>
+            <h3 className="text-2xl font-bold text-slate-900 mb-2">
+              {isFirstAccess ? 'Configurar Acesso' : 'Bem-vindo de volta'}
+            </h3>
+            <p className="text-slate-500 font-medium">
+              {isFirstAccess ? 'Crie sua senha para começar' : 'Acesse sua conta corporativa'}
+            </p>
+          </div>
+
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-10">
             <button 
               onClick={() => setIsFirstAccess(false)}
-              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${!isFirstAccess ? 'bg-white text-[#141414] shadow-sm' : 'text-[#8E9299] hover:text-[#141414]'}`}
+              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${!isFirstAccess ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-900'}`}
             >
               LOGIN
             </button>
             <button 
               onClick={() => setIsFirstAccess(true)}
-              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${isFirstAccess ? 'bg-white text-[#141414] shadow-sm' : 'text-[#8E9299] hover:text-[#141414]'}`}
+              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${isFirstAccess ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-900'}`}
             >
               PRIMEIRO ACESSO
             </button>
@@ -265,85 +285,88 @@ export default function Login() {
 
           <form onSubmit={isFirstAccess ? handleFirstAccess : handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-[#141414] uppercase tracking-widest ml-1">Email Corporativo</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Corporativo</label>
+              <div className="relative group">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors" size={18} />
                 <input 
                   type="email" 
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
-                  className="w-full pl-12 pr-4 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none text-sm font-medium"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
-                <label className="text-[10px] font-bold text-[#141414] uppercase tracking-widest">Senha</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Senha</label>
                 {!isFirstAccess && (
                   <button 
                     type="button"
                     onClick={() => handleForgotPassword().catch(err => console.error('Error in handleForgotPassword:', err))}
-                    className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-widest"
+                    className="text-[10px] font-bold text-brand-600 hover:text-brand-700 transition-colors uppercase tracking-widest"
                   >
                     Esqueceu?
                   </button>
                 )}
               </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors" size={18} />
                 <input 
                   type={showPassword ? "text" : "password"} 
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-12 pr-14 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
+                  className="w-full pl-12 pr-14 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none text-sm font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-black/5 text-[#8E9299] hover:text-[#141414] transition-all"
-                  title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                 >
-                  <span className="text-[9px] font-bold uppercase">{showPassword ? 'Ocultar' : 'Ver'}</span>
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {isFirstAccess && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                <label className="text-[10px] font-bold text-[#141414] uppercase tracking-widest ml-1">Confirmar Senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
-                  <input 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-12 pr-14 py-4 bg-[#F5F5F5] border-none rounded-2xl focus:ring-2 focus:ring-[#141414] transition-all text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-black/5 text-[#8E9299] hover:text-[#141414] transition-all"
-                    title={showConfirmPassword ? "Ocultar senha" : "Mostrar senha"}
-                  >
-                    <span className="text-[9px] font-bold uppercase">{showConfirmPassword ? 'Ocultar' : 'Ver'}</span>
-                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-            )}
+            <AnimatePresence mode="wait">
+              {isFirstAccess && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Confirmar Senha</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors" size={18} />
+                    <input 
+                      type={showConfirmPassword ? "text" : "password"} 
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-12 pr-14 py-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none text-sm font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#141414] text-white py-4 rounded-2xl font-bold shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -357,15 +380,23 @@ export default function Login() {
           </form>
 
           {!isFirstAccess && (
-            <div className="mt-8 p-4 bg-blue-50 rounded-2xl flex gap-3 border border-blue-100">
-              <AlertCircle className="text-blue-600 shrink-0" size={20} />
-              <p className="text-[11px] text-blue-800 leading-relaxed font-medium">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-10 p-5 bg-brand-50 rounded-2xl flex gap-4 border border-brand-100"
+            >
+              <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="text-brand-600" size={20} />
+              </div>
+              <p className="text-xs text-brand-900 leading-relaxed font-medium">
                 Se este é seu primeiro acesso, use a aba acima para configurar sua senha pessoal.
               </p>
-            </div>
+            </motion.div>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
+
