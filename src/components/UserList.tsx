@@ -50,7 +50,7 @@ export default function UserList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [editingUser, setEditingUser] = useState<User | undefined>();
-  const [userToDelete, setUserToDelete] = useState<{id: string, name: string} | null>(null);
+  const [userToDelete, setUserToDelete] = useState<{id: string, name: string, email: string} | null>(null);
   const [resetPasswordEmail, setResetPasswordEmail] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -135,6 +135,17 @@ export default function UserList() {
         await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
         await addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
+        // 1. Limpar email do Auth se existir (para permitir re-cadastro)
+        try {
+          await fetch('/api/delete-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: data.email })
+          });
+        } catch (cleanupError) {
+          console.warn('Erro ao tentar limpar email do Auth antes do cadastro:', cleanupError);
+        }
+
         const tempPassword = Math.random().toString(36).slice(-10);
         const appName = `SecondaryApp-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         secondaryApp = initializeApp(firebaseConfig, appName);
@@ -184,14 +195,14 @@ export default function UserList() {
     }
   };
 
-  const handleDeleteUser = async (id: string, name: string) => {
+  const handleDeleteUser = async (id: string, name: string, email: string) => {
     try {
       // 1. Deletar do Firebase Authentication via API
       try {
         const response = await fetch('/api/delete-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: id })
+          body: JSON.stringify({ uid: id, email: email })
         });
 
         if (!response.ok) {
@@ -272,7 +283,7 @@ export default function UserList() {
       <ConfirmModal
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
-        onConfirm={() => userToDelete && handleDeleteUser(userToDelete.id, userToDelete.name).catch(err => console.error('Error in handleDeleteUser:', err))}
+        onConfirm={() => userToDelete && handleDeleteUser(userToDelete.id, userToDelete.name, userToDelete.email).catch(err => console.error('Error in handleDeleteUser:', err))}
         title="Excluir Usuário"
         message={`Tem certeza que deseja excluir o usuário ${userToDelete?.name}? Esta ação não poderá ser desfeita.`}
         confirmText="Excluir"
@@ -404,7 +415,7 @@ export default function UserList() {
                             <motion.button 
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              onClick={() => setUserToDelete({ id: user.id, name: user.name })}
+                              onClick={() => setUserToDelete({ id: user.id, name: user.name, email: user.email })}
                               className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all duration-300"
                               title="Excluir"
                             >

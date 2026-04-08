@@ -109,20 +109,25 @@ apiRouter.post("/send-email", async (req, res) => {
 });
 
 apiRouter.post("/delete-user", async (req, res) => {
-  const { uid } = req.body;
+  const { uid, email } = req.body;
   
-  if (!uid) {
-    return res.status(400).json({ error: "UID não informado." });
+  if (!uid && !email) {
+    return res.status(400).json({ error: "UID ou Email não informado." });
   }
 
   try {
-    await admin.auth().deleteUser(uid);
-    console.log(`[Auth] Usuário deletado com sucesso: ${uid}`);
+    if (uid) {
+      await admin.auth().deleteUser(uid);
+      console.log(`[Auth] Usuário deletado por UID: ${uid}`);
+    } else if (email) {
+      const userRecord = await admin.auth().getUserByEmail(email);
+      await admin.auth().deleteUser(userRecord.uid);
+      console.log(`[Auth] Usuário deletado por Email: ${email} (UID: ${userRecord.uid})`);
+    }
     res.json({ success: true });
   } catch (error: any) {
-    console.error(`[Auth] Erro ao deletar usuário ${uid}:`, error);
+    console.error(`[Auth] Erro ao deletar usuário (UID: ${uid}, Email: ${email}):`, error);
     
-    // Se o usuário não existir no Auth, consideramos sucesso (já foi deletado ou nunca existiu)
     if (error.code === 'auth/user-not-found') {
       return res.json({ success: true, message: "Usuário não encontrado no Auth, mas prosseguindo." });
     }
