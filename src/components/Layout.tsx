@@ -338,7 +338,7 @@ export default function Layout() {
                         Configurações
                       </button>
                       <button 
-                        onClick={() => handleLogout()}
+                        onClick={() => handleLogout().catch(err => console.error('Error in handleLogout:', err))}
                         className="flex items-center gap-3 w-full px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
                       >
                         <LogOut size={18} />
@@ -415,7 +415,7 @@ export default function Layout() {
               </nav>
               <div className="p-6 border-t border-slate-800">
                 <button 
-                  onClick={() => handleLogout()}
+                  onClick={() => handleLogout().catch(err => console.error('Error in handleLogout:', err))}
                   className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-rose-500 text-white font-bold shadow-lg shadow-rose-500/20"
                 >
                   <LogOut size={18} />

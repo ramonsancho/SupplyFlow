@@ -60,11 +60,11 @@ export default function Login() {
         const userData = userSnap.data();
         const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
         if (bootstrapEmails.includes(user.email?.toLowerCase().trim() || '') && userData.role !== 'Administrador') {
-          await setDoc(userRef, { ...userData, role: 'Administrador' }, { merge: true });
+          await setDoc(userRef, { ...userData, role: 'Administrador' }, { merge: true }).catch(e => console.error('Error updating bootstrap admin:', e));
         }
 
         if (userData.status === 'Inativo') {
-          await signOut(auth);
+          await signOut(auth).catch(e => console.error('Sign out error:', e));
           addNotification('Acesso Negado', 'Sua conta está inativa. Entre em contato com o administrador.', 'error');
           setIsLoading(false);
           return;
@@ -74,7 +74,7 @@ export default function Login() {
         const querySnapshot = await getDocs(q);
         
         if (querySnapshot.empty) {
-          await signOut(auth);
+          await signOut(auth).catch(e => console.error('Sign out error:', e));
           addNotification('Acesso Negado', 'Este email não está autorizado no sistema.', 'error');
           setIsLoading(false);
           return;
@@ -85,14 +85,14 @@ export default function Login() {
           ...authData,
           uid: user.uid,
           updatedAt: serverTimestamp()
-        });
+        }).catch(e => console.error('Error syncing user data:', e));
 
         if (querySnapshot.docs[0].id !== user.uid) {
-          await deleteDoc(doc(db, 'users', querySnapshot.docs[0].id));
+          await deleteDoc(doc(db, 'users', querySnapshot.docs[0].id)).catch(e => console.error('Error deleting old user doc:', e));
         }
 
         if (authData.status === 'Inativo') {
-          await signOut(auth);
+          await signOut(auth).catch(e => console.error('Sign out error:', e));
           addNotification('Acesso Negado', 'Sua conta está inativa.', 'error');
           setIsLoading(false);
           return;
@@ -155,9 +155,9 @@ export default function Login() {
           uid: uid,
           createdAt: createdAt || serverTimestamp(),
           updatedAt: serverTimestamp()
-        });
+        }).catch(e => console.error('Error syncing user data on first access:', e));
 
-        if (userDoc.id !== uid) await deleteDoc(doc(db, 'users', userDoc.id));
+        if (userDoc.id !== uid) await deleteDoc(doc(db, 'users', userDoc.id)).catch(e => console.error('Error deleting old user doc on first access:', e));
       } else {
         const isRamon = email.toLowerCase().trim() === "ramon.souza@oeg.group";
         await setDoc(doc(db, 'users', uid), {
@@ -169,7 +169,7 @@ export default function Login() {
           approvalLimit: 10000000,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        });
+        }).catch(e => console.error('Error creating bootstrap user:', e));
       }
 
       addNotification('Conta Criada!', 'Seu primeiro acesso foi configurado com sucesso.', 'success');
@@ -179,7 +179,22 @@ export default function Login() {
       if (error.code === 'auth/operation-not-allowed') {
         message = 'O provedor de E-mail/Senha não está ativado no Firebase Console.';
       } else if (error.code === 'auth/email-already-in-use') {
-        message = 'Este usuário já possui uma senha configurada.';
+        // Se o email já está em uso, verificamos se ele existe no Firestore
+        const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          try {
+            await sendPasswordResetEmail(auth, email);
+            message = 'Este usuário já possui registro. Enviamos um e-mail para você definir sua senha e acessar o sistema.';
+            addNotification('Acesso Identificado', message, 'info');
+            return;
+          } catch (resetError) {
+            message = 'Este usuário já possui uma senha configurada. Tente fazer login ou use "Esqueceu a senha?".';
+          }
+        } else {
+          message = 'Este usuário já possui uma senha configurada.';
+        }
       } else if (error.message) {
         message = error.message;
       }

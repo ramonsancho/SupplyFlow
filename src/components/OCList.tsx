@@ -24,12 +24,15 @@ import RatingModal from './RatingModal';
 import ReceiveModal from './ReceiveModal';
 import ConfirmModal from './ConfirmModal';
 import { PurchaseOrder, Supplier, User } from '../types';
+import { poService } from '../services/poService';
+import { emailService } from '../services/emailService';
 import { notificationService } from '../services/notificationService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -61,6 +64,9 @@ export default function OCList() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
@@ -181,47 +187,131 @@ export default function OCList() {
 
   const handleAddPO = async (data: any) => {
     try {
+      const poNumber = await poService.getNextPONumber();
       const supplier = suppliers.find(s => s.id === data.supplierId);
-      const totalAmount = data.items.reduce((acc: number, i: any) => acc + (i.quantity * i.unitPrice) + i.tax, 0);
+      const totalAmount = Math.round(data.items.reduce((acc: number, i: any) => acc + (i.quantity * i.unitPrice) + (i.tax || 0), 0) * 100) / 100;
       
-      const poNumber = pos.length + 5001;
-      const newPO = {
+      const poPayload = {
         ...data,
         number: poNumber,
         supplierName: supplier?.name || 'Fornecedor Desconhecido',
         receivedAmount: 0,
         totalAmount,
         createdAt: serverTimestamp(),
-        createdBy: currentUserProfile?.name || 'Sistema',
+        createdBy: auth.currentUser?.uid,
         createdByName: currentUserProfile?.name || 'Sistema',
       };
 
       // Se não for rascunho, verifica se precisa de aprovação
       if (data.status !== 'draft') {
-        newPO.status = 'pending_approval';
+        poPayload.status = 'pending_approval';
       }
 
-      const docRef = await addDoc(collection(db, 'purchase-orders'), newPO);
+      const docRef = await addDoc(collection(db, 'purchase-orders'), poPayload);
       
       setIsModalOpen(false);
       await addLog('Criou OC', 'PurchaseOrder', docRef.id, auth.currentUser?.email || 'Unknown');
       await addNotification('OC Gerada', `A ordem de compra #${poNumber} foi emitida para ${supplier?.name}.`, 'success');
 
-      if (newPO.status === 'pending_approval') {
-        // Encontrar aprovadores que podem aprovar este valor
-        const potentialApprovers = allUsers.filter(u => 
-          (u.role === 'Aprovador' || u.role === 'Administrador') && 
-          u.status === 'Ativo' &&
-          (u.approvalLimit || 0) >= totalAmount
-        );
+      if (poPayload.status === 'pending_approval') {
+        // Encontrar aprovadores que podem aprovar este valor diretamente do Firestore para garantir dados atualizados
+        console.log(`[Approval] Verificando aprovadores para OC #${poNumber} no valor de R$ ${totalAmount}`);
+        
+        try {
+          const usersRef = collection(db, 'users');
+          // Fetch all active users and filter in memory to be more robust against index issues or case sensitivity
+          const qApprovers = query(usersRef, where('status', '==', 'Ativo'));
+          
+          const approversSnapshot = await getDocs(qApprovers);
+          const allActiveUsers = approversSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+          
+          const potentialApprovers = allActiveUsers.filter(u => {
+            const isApprover = u.role === 'Aprovador' || u.role === 'Administrador';
+            const hasLimit = Number(u.approvalLimit || 0) >= totalAmount;
+            return isApprover && hasLimit;
+          });
 
-        if (potentialApprovers.length > 0) {
-          // Envia para o primeiro aprovador encontrado (ou todos)
-          for (const approver of potentialApprovers) {
-            await sendApprovalEmail({ ...newPO, id: docRef.id } as any, approver);
+          console.log(`[Approval] Detalhes dos usuários ativos:`, allActiveUsers.map(u => ({ name: u.name, role: u.role, limit: u.approvalLimit, email: u.email })));
+          console.log(`[Approval] Usuários ativos: ${allActiveUsers.length}, Aprovadores com limite: ${potentialApprovers.length}`);
+
+          if (potentialApprovers.length > 0) {
+            // Unique emails
+            const approverEmails = Array.from(new Set(potentialApprovers.map(u => u.email).filter(email => !!email)));
+            const approverNames = potentialApprovers.map(u => u.name).join(', ');
+            
+            if (approverEmails.length > 0) {
+              await addNotification('Aprovadores Encontrados', `Elegíveis: ${approverNames}`, 'info');
+              
+              // Se houver apenas um destinatário, envia como string para maior compatibilidade
+              const recipient = approverEmails.length === 1 ? approverEmails[0] : approverEmails;
+
+              await emailService.sendCustomEmail({
+                to: recipient,
+                subject: `Solicitação de Aprovação: OC #${poNumber} - ${supplier?.name || 'Fornecedor'}`,
+                fromName: 'SupplyFlow Notifications',
+                text: `Solicitação de Aprovação - Ordem de Compra #${poNumber}\n\nOlá,\nUma nova Ordem de Compra foi gerada no sistema e requer sua análise e aprovação.\n\nFornecedor: ${supplier?.name || 'N/A'}\nValor Total: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\nSolicitante: ${currentUserProfile?.name || 'Sistema'}\n\nAcesse o sistema para aprovar: ${window.location.origin}`,
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta charset="utf-8">
+                    <title>Solicitação de Aprovação</title>
+                  </head>
+                  <body style="font-family: sans-serif; color: #141414; background-color: #ffffff; margin: 0; padding: 0;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E5E5; border-radius: 12px;">
+                      <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="color: #141414; margin: 0;">Solicitação de Aprovação</h2>
+                        <p style="color: #8E9299; font-size: 14px;">Ordem de Compra #${poNumber}</p>
+                      </div>
+                      
+                      <p>Olá,</p>
+                      <p>Uma nova <strong>Ordem de Compra</strong> foi gerada no sistema e requer sua análise e aprovação.</p>
+                      
+                      <div style="background-color: #F8F9FA; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #E9ECEF;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                          <tr>
+                            <td style="padding: 5px 0; color: #8E9299; font-size: 12px; text-transform: uppercase;">Fornecedor</td>
+                            <td style="padding: 5px 0; font-weight: bold; text-align: right;">${supplier?.name || 'N/A'}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 5px 0; color: #8E9299; font-size: 12px; text-transform: uppercase;">Valor Total</td>
+                            <td style="padding: 5px 0; font-weight: bold; text-align: right; color: #141414; font-size: 18px;">R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 5px 0; color: #8E9299; font-size: 12px; text-transform: uppercase;">Solicitante</td>
+                            <td style="padding: 5px 0; font-weight: bold; text-align: right;">${currentUserProfile?.name || 'Sistema'}</td>
+                          </tr>
+                        </table>
+                      </div>
+
+                      <p style="text-align: center; margin-top: 30px;">
+                        <a href="${window.location.origin}" style="background-color: #141414; color: #ffffff; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Acessar SupplyFlow</a>
+                      </p>
+                      
+                      <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 30px 0;" />
+                      <p style="font-size: 12px; color: #8E9299; text-align: center;">Este é um e-mail automático do sistema SupplyFlow. Por favor, não responda.</p>
+                    </div>
+                  </body>
+                  </html>
+                `
+              });
+              console.log(`[Approval] E-mails de aprovação enviados com sucesso para: ${approverEmails.join(', ')}`);
+              await addNotification('Emails Enviados', `Solicitação de aprovação enviada para ${approverEmails.length} destinatários.`, 'success');
+            } else {
+              console.warn('[Approval] Nenhum e-mail válido encontrado para os aprovadores potenciais.');
+              await addNotification('Aviso', 'Aprovadores encontrados, mas nenhum possui e-mail válido cadastrado.', 'warning');
+            }
+          } else {
+            const reason = allActiveUsers.length === 0 
+              ? 'Nenhum usuário ativo encontrado no sistema.'
+              : `Encontrados ${allActiveUsers.length} usuários ativos, mas nenhum com perfil de Aprovador/Admin e limite >= R$ ${totalAmount.toLocaleString()}.`;
+            
+            console.warn(`[Approval] ${reason}`);
+            await addNotification('Atenção', reason, 'warning');
           }
-        } else {
-          await addNotification('Atenção', 'Nenhum aprovador com limite suficiente encontrado para este valor.', 'warning');
+        } catch (approverError) {
+          console.error('[Approval] Erro ao buscar aprovadores ou enviar e-mails:', approverError);
+          await addNotification('Erro de Notificação', 'A OC foi criada, mas houve um erro ao processar os e-mails de aprovação.', 'error');
         }
       }
     } catch (error) {
@@ -489,6 +579,7 @@ export default function OCList() {
     await addNotification('PDF Gerado', `Ordem de compra #${po.number} salva com sucesso.`, 'success');
   };
 
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -496,13 +587,15 @@ export default function OCList() {
           <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Ordens de Compra (OC)</h2>
           <p className="text-[#8E9299] mt-1">Acompanhe pedidos, recebimentos e saldos.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
-        >
-          <Plus size={20} />
-          <span>Nova Ordem de Compra</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+          >
+            <Plus size={20} />
+            <span>Nova Ordem de Compra</span>
+          </button>
+        </div>
       </div>
 
       <POModal 
@@ -541,19 +634,71 @@ export default function OCList() {
       />
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por OC, fornecedor..." 
-            className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#141414]"
-          />
+      <div className="space-y-4">
+        <div className="bg-white p-4 rounded-2xl border border-[#E5E5E5] flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+            <input 
+              type="text" 
+              placeholder="Buscar por OC, fornecedor..." 
+              className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#141414]"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg border transition-all duration-300",
+              showAdvancedFilters 
+                ? "bg-[#141414] text-white border-[#141414] shadow-lg" 
+                : "text-[#141414] bg-white border-[#E5E5E5] hover:bg-[#F5F5F5]"
+            )}
+          >
+            <Filter size={18} />
+            <span>Filtros</span>
+          </button>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#141414] bg-white border border-[#E5E5E5] rounded-lg hover:bg-[#F5F5F5] transition-colors">
-          <Filter size={18} />
-          <span>Filtros</span>
-        </button>
+
+        <AnimatePresence>
+          {showAdvancedFilters && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-[#F5F5F5] p-6 rounded-2xl border border-[#E5E5E5] flex flex-wrap gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-[0.2em] ml-1">Status da Ordem</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Todos', value: null },
+                      { label: 'Rascunho', value: 'draft' },
+                      { label: 'Pendente', value: 'pending_approval' },
+                      { label: 'Aprovado', value: 'approved' },
+                      { label: 'Recebido', value: 'received' },
+                      { label: 'Fechado', value: 'closed' }
+                    ].map((btn) => (
+                      <button 
+                        key={String(btn.value)}
+                        onClick={() => setFilterStatus(btn.value)}
+                        className={cn(
+                          "px-4 py-2 rounded-lg text-xs font-bold border transition-all duration-300",
+                          filterStatus === btn.value 
+                            ? "bg-[#141414] text-white border-[#141414] shadow-md" 
+                            : "bg-white text-[#8E9299] border-[#E5E5E5] hover:border-[#8E9299]"
+                        )}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* OC Grid */}
@@ -569,7 +714,14 @@ export default function OCList() {
             <p className="text-[#8E9299] mt-1">Clique em "Nova Ordem de Compra" para começar.</p>
           </div>
         ) : (
-          pos.map((oc) => (
+          pos
+            .filter(oc => {
+              const matchesSearch = oc.number.toString().includes(searchTerm) || 
+                                   oc.supplierName.toLowerCase().includes(searchTerm.toLowerCase());
+              const matchesStatus = filterStatus === null || oc.status === filterStatus;
+              return matchesSearch && matchesStatus;
+            })
+            .map((oc) => (
             <div key={oc.id} className="bg-white rounded-3xl border border-[#E5E5E5] p-6 hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center gap-8">
               <div className="flex-1 min-w-[200px]">
                 <div className="flex items-center gap-3 mb-2">

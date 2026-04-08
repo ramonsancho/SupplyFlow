@@ -20,6 +20,7 @@ import ConfirmModal from './ConfirmModal';
 import { User } from '../types';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
+import { emailService } from '../services/emailService';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { 
@@ -117,6 +118,23 @@ export default function UserList() {
       }
     });
 
+    const checkApiHealth = async () => {
+      try {
+        const response = await fetch('/api/health');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[API Health]', data);
+          if (data.firebaseAdmin === 'not_initialized') {
+            console.warn('[API Health] Firebase Admin não está inicializado no servidor.');
+          }
+        }
+      } catch (e) {
+        console.warn('[API Health] Não foi possível conectar à API de backend:', e);
+      }
+    };
+
+    checkApiHealth();
+
     return () => {
       if (unsubscribeProfile) unsubscribeProfile();
       unsubscribeUsers();
@@ -124,7 +142,6 @@ export default function UserList() {
   }, []);
 
   const handleSaveUser = async (data: any) => {
-    let secondaryApp;
     try {
       if (editingUser) {
         const userRef = doc(db, 'users', editingUser.id);
@@ -142,68 +159,52 @@ export default function UserList() {
           return;
         }
 
-        // 1. Limpar email do Auth se existir (para permitir re-cadastro)
-        try {
-          const cleanupResponse = await fetch('/api/delete-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: data.email })
-          });
-          
-          if (!cleanupResponse.ok) {
-            const errorData = await cleanupResponse.json().catch(() => ({}));
-            console.warn('Aviso: A limpeza automática do Auth falhou:', errorData.error || cleanupResponse.statusText);
-            // Não bloqueamos aqui, pois o usuário pode não existir no Auth
-          }
-        } catch (cleanupError) {
-          console.warn('Erro na requisição de limpeza do Auth:', cleanupError);
-        }
-
-        const tempPassword = Math.random().toString(36).slice(-10);
-        const appName = `SecondaryApp-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        secondaryApp = initializeApp(firebaseConfig, appName);
-        const secondaryAuth = getAuthSecondary(secondaryApp);
-        
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, data.email, tempPassword);
-        const uid = userCredential.user.uid;
-        
-        await setDoc(doc(db, 'users', uid), {
+        // Apenas criamos o documento no Firestore. 
+        // O usuário criará sua conta de Autenticação através do "Primeiro Acesso" na tela de Login.
+        const docRef = await addDoc(collection(db, 'users'), {
           ...data,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          status: data.status || 'Ativo'
         });
         
+        // Opcional: Enviar um email de convite informando que ele pode fazer o primeiro acesso
         try {
-          await sendPasswordResetEmail(auth, data.email);
-        } catch (resetError) {
-          console.error('Error sending initial reset email:', resetError);
+          await emailService.sendCustomEmail({
+            to: data.email,
+            subject: 'Convite para o SupplyFlow',
+            fromName: 'SupplyFlow Team',
+            html: `
+              <div style="font-family: sans-serif; color: #141414; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E5E5; border-radius: 12px;">
+                <h2 style="color: #141414;">Bem-vindo ao SupplyFlow</h2>
+                <p>Olá <strong>${data.name}</strong>,</p>
+                <p>Você foi cadastrado no sistema SupplyFlow como <strong>${data.role}</strong>.</p>
+                <p>Para acessar o sistema pela primeira vez, siga os passos abaixo:</p>
+                <ol>
+                  <li>Acesse a página de login.</li>
+                  <li>Clique na aba <strong>"PRIMEIRO ACESSO"</strong>.</li>
+                  <li>Informe seu e-mail corporativo e defina sua senha pessoal.</li>
+                </ol>
+                <p>Se tiver dúvidas, entre em contato com o administrador.</p>
+                <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 20px 0;" />
+                <p style="font-size: 12px; color: #8E9299;">SupplyFlow Management System</p>
+              </div>
+            `
+          });
+        } catch (emailErr) {
+          console.warn('Não foi possível enviar o e-mail de convite, mas o usuário foi criado no banco.', emailErr);
         }
         
-        await addLog('Cadastrou Usuário', 'User', uid, auth.currentUser?.email || 'Unknown');
-        await addNotification('Usuário Cadastrado', `${data.name} foi adicionado e um email de redefinição foi enviado.`, 'success');
+        await addLog('Cadastrou Usuário', 'User', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('Usuário Cadastrado', `${data.name} foi adicionado. Ele deve realizar o "Primeiro Acesso" para definir sua senha.`, 'success');
       }
       setIsModalOpen(false);
       setEditingUser(undefined);
     } catch (error: any) {
       console.error('User save error:', error);
-      if (error.code === 'auth/operation-not-allowed') {
-        await addNotification('Erro de Configuração', 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.', 'error');
-      } else if (error.code === 'auth/email-already-in-use') {
-        await addNotification('Erro', 'Este email já está em uso. Se o usuário não aparece na lista, verifique se a variável FIREBASE_SERVICE_ACCOUNT_KEY está configurada no Vercel.', 'error');
-      } else {
-        try {
-          handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
-        } catch (e) {
-          await addNotification('Erro', 'Não foi possível salvar o usuário.', 'error');
-        }
-      }
-    } finally {
-      if (secondaryApp) {
-        try {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          await deleteApp(secondaryApp);
-        } catch (deleteError) {
-          console.error('Error deleting secondary app:', deleteError);
-        }
+      try {
+        handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
+      } catch (e) {
+        await addNotification('Erro', 'Não foi possível salvar o usuário.', 'error');
       }
     }
   };

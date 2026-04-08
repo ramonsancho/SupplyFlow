@@ -477,7 +477,7 @@ export default function Dashboard() {
                 />
                 <Bar 
                   dataKey="savings" 
-                  fill="#3b82f6" 
+                  fill="#10b981" 
                   radius={[4, 4, 0, 0]} 
                   barSize={12} 
                 />

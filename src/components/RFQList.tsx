@@ -44,6 +44,8 @@ export default function RFQList() {
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
 
@@ -277,10 +279,12 @@ export default function RFQList() {
     }
   };
 
-  const filteredRfqs = rfqs.filter(rfq => 
-    rfq.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rfq.number.toString().includes(searchTerm)
-  );
+  const filteredRfqs = rfqs.filter(rfq => {
+    const matchesSearch = rfq.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         rfq.number.toString().includes(searchTerm);
+    const matchesStatus = filterStatus === null || rfq.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-12">
@@ -342,21 +346,69 @@ export default function RFQList() {
       )}
 
       {/* Filters Bar */}
-      <div className="bg-white p-3 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Buscar por número ou título da cotação..." 
-            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="space-y-4">
+        <div className="bg-white p-3 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center gap-4">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input 
+              type="text" 
+              placeholder="Buscar por número ou título da cotação..." 
+              className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={cn(
+              "flex items-center gap-2 px-6 py-4 text-sm font-bold rounded-2xl border transition-all duration-300",
+              showAdvancedFilters 
+                ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
+                : "text-slate-600 bg-white border-slate-200 hover:bg-slate-50"
+            )}
+          >
+            <Filter size={18} />
+            <span>Filtros</span>
+          </button>
         </div>
-        <button className="flex items-center gap-2 px-6 py-4 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all duration-300">
-          <Filter size={18} />
-          <span>Filtros Avançados</span>
-        </button>
+
+        <AnimatePresence>
+          {showAdvancedFilters && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-200 flex flex-wrap gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Status da Cotação</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Todos', value: null },
+                      { label: 'Rascunho', value: 'draft' },
+                      { label: 'Enviado', value: 'sent' },
+                      { label: 'Fechado', value: 'closed' }
+                    ].map((btn) => (
+                      <button 
+                        key={String(btn.value)}
+                        onClick={() => setFilterStatus(btn.value)}
+                        className={cn(
+                          "px-6 py-2.5 rounded-xl text-xs font-bold border transition-all duration-300",
+                          filterStatus === btn.value 
+                            ? "bg-slate-900 text-white border-slate-900 shadow-md" 
+                            : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                        )}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* RFQ List Container */}

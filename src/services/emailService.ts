@@ -4,6 +4,7 @@ export interface EmailPayload {
   to: string | string[];
   subject: string;
   html: string;
+  text?: string;
   fromName?: string;
 }
 
@@ -13,6 +14,11 @@ export interface EmailPayload {
  */
 export const emailService = {
   sendCustomEmail: async (payload: EmailPayload) => {
+    console.log('[EmailService] Enviando e-mail:', { 
+      to: payload.to, 
+      subject: payload.subject,
+      fromName: payload.fromName 
+    });
     const response = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
