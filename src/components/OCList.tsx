@@ -24,6 +24,7 @@ import RatingModal from './RatingModal';
 import ReceiveModal from './ReceiveModal';
 import ConfirmModal from './ConfirmModal';
 import { PurchaseOrder, Supplier, User } from '../types';
+import { notificationService } from '../services/notificationService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
@@ -170,9 +171,12 @@ export default function OCList() {
   }, []);
 
   const sendApprovalEmail = async (po: PurchaseOrder, approver: User) => {
-    // Simulação de envio de email
-    
-    await addNotification('Email de Aprovação Enviado', `Notificação enviada para ${approver.name} (${approver.email})`, 'info');
+    const success = await notificationService.sendPOApprovalNotification(po, approver);
+    if (success) {
+      await addNotification('Email de Aprovação Enviado', `Notificação enviada para ${approver.name}`, 'info');
+    } else {
+      await addNotification('Erro no Email', `Não foi possível notificar ${approver.name} por email.`, 'warning');
+    }
   };
 
   const handleAddPO = async (data: any) => {

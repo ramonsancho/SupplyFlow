@@ -1,8 +1,27 @@
 import express from "express";
 import nodemailer from "nodemailer";
+import admin from "firebase-admin";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 app.use(express.json());
+
+// Initialize Firebase Admin
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    admin.initializeApp({
+      projectId: config.projectId,
+    });
+    console.log("[Firebase Admin] Inicializado com sucesso.");
+  } else {
+    console.warn("[Firebase Admin] Arquivo de configuração não encontrado. Algumas funções podem falhar.");
+  }
+} catch (error) {
+  console.error("[Firebase Admin] Erro ao inicializar:", error);
+}
 
 // Logger de requisições global
 app.use((req, res, next) => {
@@ -85,6 +104,32 @@ apiRouter.post("/send-email", async (req, res) => {
     res.status(500).json({ 
       error: "Falha ao enviar e-mail via SMTP.",
       message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+apiRouter.post("/delete-user", async (req, res) => {
+  const { uid } = req.body;
+  
+  if (!uid) {
+    return res.status(400).json({ error: "UID não informado." });
+  }
+
+  try {
+    await admin.auth().deleteUser(uid);
+    console.log(`[Auth] Usuário deletado com sucesso: ${uid}`);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error(`[Auth] Erro ao deletar usuário ${uid}:`, error);
+    
+    // Se o usuário não existir no Auth, consideramos sucesso (já foi deletado ou nunca existiu)
+    if (error.code === 'auth/user-not-found') {
+      return res.json({ success: true, message: "Usuário não encontrado no Auth, mas prosseguindo." });
+    }
+
+    res.status(500).json({ 
+      error: "Falha ao deletar usuário do Firebase Authentication.",
+      message: error.message 
     });
   }
 });

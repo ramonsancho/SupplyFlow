@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, FileText, Calendar, Tag, CheckCircle2, Clock, AlertCircle, ShoppingCart } from 'lucide-react';
-import { RFQ, Proposal, User } from '../types';
+import { RFQ, Proposal, User, PurchaseOrder } from '../types';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy, getDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
+import { notificationService } from '../services/notificationService';
 import ProposalModal from './ProposalModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -24,8 +25,21 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
+
+  useEffect(() => {
+    const qUsers = query(collection(db, 'users'));
+    const unsubscribeAllUsers = onSnapshot(qUsers, (snapshot) => {
+      const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+      setAllUsers(users);
+    }, (error) => {
+      console.error('Error fetching users in RFQDetailsModal:', error);
+    });
+
+    return () => unsubscribeAllUsers();
+  }, []);
 
   useEffect(() => {
     if (auth.currentUser) {
@@ -145,6 +159,28 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
 
       await addLog('Gerou PO de Proposta', 'PurchaseOrder', poRef.id, auth.currentUser?.email || 'Unknown');
       await addNotification('PO Gerada', `A Ordem de Compra #${poNumber} foi gerada a partir da proposta de ${proposal.supplierName}.`, 'success');
+
+      // 5. Notificar aprovadores por email
+      const potentialApprovers = allUsers.filter(u => 
+        (u.role === 'Aprovador' || u.role === 'Administrador') && 
+        u.status === 'Ativo' &&
+        (u.approvalLimit || 0) >= proposal.totalValue
+      );
+
+      if (potentialApprovers.length > 0) {
+        const poForEmail = { ...poPayload, id: poRef.id } as PurchaseOrder;
+        for (const approver of potentialApprovers) {
+          try {
+            const success = await notificationService.sendPOApprovalNotification(poForEmail, approver);
+            if (success) {
+              await addNotification('Email de Aprovação Enviado', `Notificação enviada para ${approver.name}`, 'info');
+            }
+          } catch (emailError) {
+            console.error('Erro ao processar notificação de email:', emailError);
+          }
+        }
+      }
+
       onClose();
     } catch (error) {
       try {

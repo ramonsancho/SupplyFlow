@@ -35,6 +35,8 @@ async function startServer() {
   }
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("[Server] Erro fatal ao iniciar servidor:", err);
+});
 
 export default app;

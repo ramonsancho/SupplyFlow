@@ -186,7 +186,31 @@ export default function UserList() {
 
   const handleDeleteUser = async (id: string, name: string) => {
     try {
+      // 1. Deletar do Firebase Authentication via API
+      try {
+        const response = await fetch('/api/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: id })
+        });
+
+        if (!response.ok) {
+          let errorMsg = 'Erro desconhecido';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorData.message || response.statusText;
+          } catch (e) {
+            errorMsg = response.statusText;
+          }
+          console.warn('Erro ao deletar do Auth:', errorMsg);
+        }
+      } catch (e) {
+        console.error('Falha na requisição de deleção do Auth:', e);
+      }
+
+      // 2. Deletar do Firestore
       await deleteDoc(doc(db, 'users', id));
+      
       await addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
       await addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
     } catch (error) {
