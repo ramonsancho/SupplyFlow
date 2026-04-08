@@ -135,15 +135,28 @@ export default function UserList() {
         await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
         await addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
+        // 0. Verificar se já existe no Firestore
+        const emailExists = users.some(u => u.email.toLowerCase() === data.email.toLowerCase());
+        if (emailExists) {
+          await addNotification('Erro', 'Este email já está cadastrado na lista de usuários.', 'error');
+          return;
+        }
+
         // 1. Limpar email do Auth se existir (para permitir re-cadastro)
         try {
-          await fetch('/api/delete-user', {
+          const cleanupResponse = await fetch('/api/delete-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: data.email })
           });
+          
+          if (!cleanupResponse.ok) {
+            const errorData = await cleanupResponse.json().catch(() => ({}));
+            console.warn('Aviso: A limpeza automática do Auth falhou:', errorData.error || cleanupResponse.statusText);
+            // Não bloqueamos aqui, pois o usuário pode não existir no Auth
+          }
         } catch (cleanupError) {
-          console.warn('Erro ao tentar limpar email do Auth antes do cadastro:', cleanupError);
+          console.warn('Erro na requisição de limpeza do Auth:', cleanupError);
         }
 
         const tempPassword = Math.random().toString(36).slice(-10);
@@ -175,7 +188,7 @@ export default function UserList() {
       if (error.code === 'auth/operation-not-allowed') {
         await addNotification('Erro de Configuração', 'O provedor de E-mail/Senha não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.', 'error');
       } else if (error.code === 'auth/email-already-in-use') {
-        await addNotification('Erro', 'Este email já está em uso no sistema.', 'error');
+        await addNotification('Erro', 'Este email já está em uso. Se o usuário não aparece na lista, verifique se a variável FIREBASE_SERVICE_ACCOUNT_KEY está configurada no Vercel.', 'error');
       } else {
         try {
           handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');

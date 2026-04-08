@@ -9,15 +9,23 @@ app.use(express.json());
 
 // Initialize Firebase Admin
 try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
     admin.initializeApp({
-      projectId: config.projectId,
+      credential: admin.credential.cert(serviceAccount),
     });
-    console.log("[Firebase Admin] Inicializado com sucesso.");
+    console.log("[Firebase Admin] Inicializado com Service Account Key.");
   } else {
-    console.warn("[Firebase Admin] Arquivo de configuração não encontrado. Algumas funções podem falhar.");
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      admin.initializeApp({
+        projectId: config.projectId,
+      });
+      console.log("[Firebase Admin] Inicializado com sucesso via config file.");
+    } else {
+      console.warn("[Firebase Admin] Arquivo de configuração não encontrado. Algumas funções podem falhar.");
+    }
   }
 } catch (error) {
   console.error("[Firebase Admin] Erro ao inicializar:", error);
