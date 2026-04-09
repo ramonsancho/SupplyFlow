@@ -13,7 +13,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Lock,
-  UserCheck
+  UserCheck,
+  MoreVertical
 } from 'lucide-react';
 import UserModal from './UserModal';
 import ConfirmModal from './ConfirmModal';
@@ -21,6 +22,7 @@ import { User } from '../types';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { emailService } from '../services/emailService';
+import { teamsService } from '../services/teamsService';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { 

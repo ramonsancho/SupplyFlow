@@ -6,6 +6,7 @@ import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDo
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { emailService } from '../services/emailService';
+import { teamsService } from '../services/teamsService';
 import { notificationService } from '../services/notificationService';
 import { poService } from '../services/poService';
 import ProposalModal from './ProposalModal';
@@ -177,7 +178,8 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         
         const potentialApprovers = allActiveUsers.filter(u => {
           const isApprover = u.role === 'Aprovador' || u.role === 'Administrador';
-          const hasLimit = Number(u.approvalLimit || 0) >= totalAmount;
+          // Administradores podem aprovar qualquer valor, Aprovadores dependem do limite
+          const hasLimit = u.role === 'Administrador' || Number(u.approvalLimit || 0) >= totalAmount;
           return isApprover && hasLimit;
         });
 
@@ -185,71 +187,47 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         console.log(`[Approval] Usuários ativos: ${allActiveUsers.length}, Aprovadores com limite: ${potentialApprovers.length}`);
 
         if (potentialApprovers.length > 0) {
-          // Unique emails
-          const approverEmails = Array.from(new Set(potentialApprovers.map(u => u.email).filter(email => !!email)));
           const approverNames = potentialApprovers.map(u => u.name).join(', ');
+          await addNotification('Aprovadores Encontrados', `Elegíveis: ${approverNames}`, 'info');
           
-          if (approverEmails.length > 0) {
-            await addNotification('Aprovadores Encontrados', `Elegíveis: ${approverNames}`, 'info');
-            
-            // Se houver apenas um destinatário, envia como string para maior compatibilidade
-            const recipient = approverEmails.length === 1 ? approverEmails[0] : approverEmails;
+          let emailCount = 0;
+          let teamsCount = 0;
 
-            await emailService.sendCustomEmail({
-              to: recipient,
-              subject: `Solicitação de Aprovação: OC #${poNumber} - ${proposal.supplierName}`,
-              fromName: 'SupplyFlow Notifications',
-              text: `Solicitação de Aprovação - Ordem de Compra #${poNumber}\n\nOlá,\nUma nova Ordem de Compra foi gerada a partir de uma RFQ e requer sua análise e aprovação.\n\nFornecedor: ${proposal.supplierName}\nValor Total: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\nSolicitante: ${currentUserProfile?.name || 'Sistema'}\n\nAcesse o sistema para aprovar: ${window.location.origin}`,
-              html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta charset="utf-8">
-                  <title>Solicitação de Aprovação</title>
-                </head>
-                <body style="font-family: sans-serif; color: #141414; background-color: #ffffff; margin: 0; padding: 0;">
-                  <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E5E5; border-radius: 12px;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                      <h2 style="color: #141414; margin: 0;">Solicitação de Aprovação</h2>
-                      <p style="color: #8E9299; font-size: 14px;">Ordem de Compra #${poNumber}</p>
-                    </div>
-                    
-                    <p>Olá,</p>
-                    <p>Uma nova <strong>Ordem de Compra</strong> foi gerada a partir de uma RFQ e requer sua análise e aprovação.</p>
-                    
-                    <div style="background-color: #F8F9FA; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #E9ECEF;">
-                      <table style="width: 100%; border-collapse: collapse;">
-                        <tr>
-                          <td style="padding: 5px 0; color: #8E9299; font-size: 12px; text-transform: uppercase;">Fornecedor</td>
-                          <td style="padding: 5px 0; font-weight: bold; text-align: right;">${proposal.supplierName}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 5px 0; color: #8E9299; font-size: 12px; text-transform: uppercase;">Valor Total</td>
-                          <td style="padding: 5px 0; font-weight: bold; text-align: right; color: #141414; font-size: 18px;">R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 5px 0; color: #8E9299; font-size: 12px; text-transform: uppercase;">Solicitante</td>
-                          <td style="padding: 5px 0; font-weight: bold; text-align: right;">${currentUserProfile?.name || 'Sistema'}</td>
-                        </tr>
-                      </table>
-                    </div>
+          const poForNotification: PurchaseOrder = {
+            id: poRef.id,
+            number: poNumber,
+            supplierName: proposal.supplierName,
+            supplierId: proposal.supplierId,
+            totalAmount,
+            status: 'pending_approval',
+            createdBy: auth.currentUser?.uid || '',
+            items: proposal.items.map(item => ({
+              id: item.id,
+              description: item.description,
+              quantity: item.quantity,
+              unit: 'un', // Default unit if not present in proposal
+              unitPrice: item.unitPrice,
+              tax: 0
+            })),
+            receivedAmount: 0,
+            createdAt: new Date().toISOString()
+          };
 
-                    <p style="text-align: center; margin-top: 30px;">
-                      <a href="${window.location.origin}" style="background-color: #141414; color: #ffffff; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Acessar SupplyFlow</a>
-                    </p>
-                    
-                    <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 30px 0;" />
-                    <p style="font-size: 12px; color: #8E9299; text-align: center;">Este é um e-mail automático do sistema SupplyFlow. Por favor, não responda.</p>
-                  </div>
-                </body>
-                </html>
-              `
-            });
-            console.log(`[Approval] E-mails de aprovação enviados com sucesso para: ${approverEmails.join(', ')}`);
-            await addNotification('Emails Enviados', `Solicitação de aprovação enviada para ${approverEmails.length} destinatários.`, 'success');
-          } else {
-            console.warn('[Approval] Nenhum e-mail válido encontrado para os aprovadores potenciais.');
-            await addNotification('Aviso', 'Aprovadores encontrados, mas nenhum possui e-mail válido cadastrado.', 'warning');
+          for (const approver of potentialApprovers) {
+            const { emailSuccess, teamsSuccess } = await notificationService.sendPOApprovalNotification(
+              poForNotification, 
+              approver, 
+              currentUserProfile?.name || 'Sistema'
+            );
+            if (emailSuccess) emailCount++;
+            if (teamsSuccess) teamsCount++;
+          }
+
+          if (emailCount > 0) {
+            await addNotification('Emails Enviados', `${emailCount} e-mail(s) de aprovação enviado(s).`, 'success');
+          }
+          if (teamsCount > 0) {
+            await addNotification('Teams Notificado', `${teamsCount} alerta(s) enviado(s) via Teams.`, 'success');
           }
         } else {
           const reason = allActiveUsers.length === 0 

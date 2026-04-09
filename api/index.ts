@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import admin from "firebase-admin";
 import fs from "fs";
 import path from "path";
+import https from "https";
 import "dotenv/config";
 
 const app = express();
@@ -101,16 +102,6 @@ apiRouter.post("/send-email", async (req, res) => {
   try {
     const from = `"${fromName || 'SupplyFlow'}" <${process.env.SMTP_FROM || user}>`;
     
-    // Configurações extras para evitar filtros de spam (Mimecast)
-    const extraHeaders = {
-      'X-Priority': '1 (Highest)',
-      'X-MSMail-Priority': 'High',
-      'Importance': 'high',
-      'X-Mailer': 'SupplyFlow-Management-System',
-      'Precedence': 'bulk' // Algumas vezes 'bulk' é pior, mas 'list' ou nada é melhor. 
-                           // Na verdade, para Mimecast, 'bulk' pode ser ruim. Vou deixar sem Precedence.
-    };
-
     if (Array.isArray(to)) {
       console.log(`[Email] Enviando ${to.length} e-mails individuais para: ${to.join(', ')}`);
       
@@ -124,7 +115,6 @@ apiRouter.post("/send-email", async (req, res) => {
             html,
             text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
             replyTo,
-            headers: extraHeaders
           });
           results.push({ recipient, success: true, messageId: info.messageId });
           console.log(`[Email] Sucesso para: ${recipient} (MessageID: ${info.messageId})`);
@@ -154,7 +144,6 @@ apiRouter.post("/send-email", async (req, res) => {
         html,
         text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
         replyTo,
-        headers: extraHeaders
       });
       console.log(`[Email] Sucesso! E-mail enviado para: ${to} (MessageID: ${info.messageId})`);
     }
@@ -165,6 +154,74 @@ apiRouter.post("/send-email", async (req, res) => {
     res.status(500).json({ 
       error: "Falha ao enviar e-mail via SMTP.",
       message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+apiRouter.post("/send-teams", async (req, res) => {
+  const { webhookUrl, title, text, sections, potentialAction } = req.body;
+
+  if (!webhookUrl) {
+    return res.status(400).json({ error: "Webhook URL não informada." });
+  }
+
+  // Payload no formato MessageCard (padrão para Incoming Webhooks)
+  const payload = {
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    "themeColor": "0052FF",
+    "summary": title,
+    "title": title,
+    "text": text,
+    "sections": sections,
+    "potentialAction": potentialAction
+  };
+
+  try {
+    console.log(`[Teams] Enviando para: ${webhookUrl.substring(0, 50)}...`);
+    
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+    
+    if (response.ok) {
+      console.log(`[Teams] Sucesso! Resposta: ${responseText}`);
+      return res.json({ success: true, details: responseText });
+    } else {
+      console.error(`[Teams] Erro do Teams (${response.status}): ${responseText}`);
+      
+      // Se falhou com o payload complexo, tenta um payload ultra-simples como fallback
+      console.log(`[Teams] Tentando fallback com payload simples...`);
+      const simplePayload = { text: `${title}: ${text}` };
+      
+      const retryResponse = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(simplePayload)
+      });
+
+      if (retryResponse.ok) {
+        console.log(`[Teams] Sucesso no fallback!`);
+        return res.json({ success: true, note: "Enviado via fallback simples" });
+      }
+
+      return res.status(response.status).json({ 
+        error: "Erro na resposta do Teams", 
+        status: response.status,
+        details: responseText 
+      });
+    }
+  } catch (error: any) {
+    console.error("[Teams] Erro na requisição proxy:", error);
+    res.status(500).json({ 
+      error: "Falha ao conectar com o Teams (Proxy Error)", 
+      message: error.message 
     });
   }
 });
