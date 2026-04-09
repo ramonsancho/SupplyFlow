@@ -32,14 +32,20 @@ export default class ErrorBoundary extends React.Component<Props, State> {
       let errorMessage = 'Ocorreu um erro inesperado.';
       let errorDetails = '';
 
-      try {
-        const parsedError = JSON.parse(this.state.error?.message || '{}');
-        if (parsedError.error === 'Missing or insufficient permissions.') {
-          errorMessage = 'Você não tem permissão para acessar este recurso.';
-          errorDetails = `Operação: ${parsedError.operationType} em ${parsedError.path}`;
+      if (this.state.error && this.state.error.message) {
+        try {
+          if (this.state.error.message.startsWith('{')) {
+            const parsedError = JSON.parse(this.state.error.message);
+            if (parsedError.error === 'Missing or insufficient permissions.') {
+              errorMessage = 'Você não tem permissão para acessar este recurso.';
+              errorDetails = `Operação: ${parsedError.operationType} em ${parsedError.path}`;
+            }
+          } else {
+            errorMessage = this.state.error.message;
+          }
+        } catch (e) {
+          errorMessage = this.state.error.message;
         }
-      } catch (e) {
-        errorMessage = this.state.error?.message || errorMessage;
       }
 
       return (
