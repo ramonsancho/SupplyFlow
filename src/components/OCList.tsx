@@ -550,8 +550,11 @@ export default function OCList() {
     // Footer Disclaimer
     doc.setFontSize(8);
     doc.setFont('helvetica', 'italic');
-    const footerText = "AO ACEITAR ESSA ORDEM DE COMPRA O FORNECEDOR RESPONDE POR DANOS CAUSADOS A OEG E SEUS CLIENTES, INDEPENDENTENDMENTE DE CULPA, BASTANDO PROVAR O NEXO DE CAUSALIDADE ENTRE DEFEITO E DANO E/OU RESPONDERÁ DE FORMA DIRETA OU SOLIDARIAMENTE PELOS VICIOS DE QUALIDADE OU QUANTIDADE.";
-    doc.text(footerText, 10, 270, { maxWidth: 180, align: 'justify' });
+    const footerText1 = "1.0 - Ao aceitar essa ordem de compra o fornecedor responde por danos causados a OEG e seus clientes, independentemente de culpa, bastando provar o nexo de causalidade entre defeito e dano e/ou responderá de forma direta ou solidariamente pelos vicios de qualidade ou quantidade.";
+    const footerText2 = "2.0 - A OEG não aceita negociação de desconto de título, é proibido ceder, transferir, onerar ou de qualquer forma alienar os direitos creditórios decorrentes de contratos, ordens de compra ou títulos de crédito que representem duplicatas e notas ficais, a terceiros, sejam eles empresas de fomento mercantil (factoring), fundos de investimento em direitos creditórios (fidc), instituições financeiras ou quaisquer outros cessionários, salvo mediante prévia e expressa autorização escrita da OEG.";
+    
+    doc.text(footerText1, 10, 270, { maxWidth: 180, align: 'justify' });
+    doc.text(footerText2, 10, 282, { maxWidth: 180, align: 'justify' });
 
     doc.save(`OC_${po.number}.pdf`);
     await addNotification('PDF Gerado', `Ordem de compra #${po.number} salva com sucesso.`, 'success');
