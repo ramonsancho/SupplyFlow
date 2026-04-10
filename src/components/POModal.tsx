@@ -65,7 +65,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
     const q = query(collection(db, 'families'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
-      const defaultFamilies = ['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística'];
+      const defaultFamilies = ['Serviços de TI', 'Limpeza', 'Logística de Material'];
       const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort();
       setFamilies(allFamilies);
     }, (error) => {

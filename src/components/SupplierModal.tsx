@@ -13,7 +13,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const DEFAULT_FAMILIES = ['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística'];
+const DEFAULT_FAMILIES = ['Serviços de TI', 'Limpeza', 'Logística de Material'];
 
 const supplierSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),

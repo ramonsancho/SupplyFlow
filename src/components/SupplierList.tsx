@@ -47,7 +47,7 @@ export default function SupplierList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [families, setFamilies] = useState<string[]>(['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística']);
+  const [families, setFamilies] = useState<string[]>(['Serviços de TI', 'Limpeza', 'Logística de Material']);
   const [selectedFamily, setSelectedFamily] = useState('Todas as Famílias');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | undefined>();
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -83,7 +83,7 @@ export default function SupplierList() {
     const q = query(collection(db, 'families'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
-      const defaultFamilies = ['Eletrônicos', 'Escritório', 'Serviços de TI', 'Limpeza', 'Mobiliário', 'Logística'];
+      const defaultFamilies = ['Serviços de TI', 'Limpeza', 'Logística de Material'];
       const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort();
       setFamilies(allFamilies);
     }, (error) => {
