@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { X, Save, Plus } from 'lucide-react';
 import { Supplier } from '../types';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp, deleteDoc, doc, getDocs, where } from 'firebase/firestore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -115,6 +115,32 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
         handleFirestoreError(error, OperationType.CREATE, 'families');
       } catch (e) {
         console.error('Family add error:', e);
+      }
+    }
+  };
+
+  const handleDeleteFamily = async (e: React.MouseEvent, familyName: string) => {
+    e.stopPropagation();
+    if (readOnly || DEFAULT_FAMILIES.includes(familyName)) return;
+
+    if (!window.confirm(`Deseja realmente excluir a família "${familyName}"?`)) return;
+
+    try {
+      const q = query(collection(db, 'families'), where('name', '==', familyName));
+      const snapshot = await getDocs(q);
+      
+      const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, 'families', d.id)));
+      await Promise.all(deletePromises);
+      
+      // If the deleted family was selected, remove it
+      if (selectedFamilies.includes(familyName)) {
+        setValue('families', selectedFamilies.filter(f => f !== familyName));
+      }
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.DELETE, `families/${familyName}`);
+      } catch (e) {
+        console.error('Family delete error:', e);
       }
     }
   };
@@ -248,14 +274,21 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
                   type="button"
                   onClick={() => toggleFamily(family)}
                   className={cn(
-                    "px-4 py-2 rounded-full text-xs font-bold transition-all border",
+                    "px-4 py-2 rounded-full text-xs font-bold transition-all border flex items-center gap-2",
                     selectedFamilies.includes(family)
                       ? "bg-[#141414] text-white border-[#141414]"
                       : "bg-white text-[#8E9299] border-[#E5E5E5] hover:border-[#141414]",
                     readOnly && "cursor-default"
                   )}
                 >
-                  {family}
+                  <span>{family}</span>
+                  {!readOnly && !DEFAULT_FAMILIES.includes(family) && (
+                    <X 
+                      size={12} 
+                      className="hover:text-red-500 transition-colors" 
+                      onClick={(e) => handleDeleteFamily(e, family)}
+                    />
+                  )}
                 </button>
               ))}
               
