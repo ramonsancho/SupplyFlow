@@ -383,18 +383,24 @@ export default function OCList() {
     }
   };
 
-  const handleEditAmount = async (newAmount: number) => {
+  const handleEditAmount = async (newAmount: number, items?: any[]) => {
     if (!selectedPO) return;
 
     try {
       const oldAmount = selectedPO.totalAmount;
-      await updateDoc(doc(db, 'purchase-orders', selectedPO.id), {
+      const updateData: any = {
         totalAmount: newAmount,
         updatedAt: serverTimestamp()
-      });
+      };
+
+      if (items) {
+        updateData.items = items;
+      }
+
+      await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
 
       await addLog('Editou Valor OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
-      await addNotification('Valor Alterado', `O valor da OC #${selectedPO.number} foi alterado de R$ ${oldAmount.toLocaleString()} para R$ ${newAmount.toLocaleString()}.`, 'success');
+      await addNotification('OC Atualizada', `A OC #${selectedPO.number} foi atualizada com sucesso.`, 'success');
       setIsEditAmountModalOpen(false);
       setSelectedPO(null);
     } catch (error) {
@@ -587,15 +593,20 @@ export default function OCList() {
     doc.text(approvedByText, 110, 260);
 
     // Footer Disclaimer
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'italic');
-    const footerText1 = "1.0 - Ao aceitar essa ordem de compra o fornecedor responde por danos causados a OEG e seus clientes, independentemente de culpa, bastando provar o nexo de causalidade entre defeito e dano e/ou responderá de forma direta ou solidariamente pelos vicios de qualidade ou quantidade.";
-    const footerText2 = "2.0 - A OEG não aceita negociação de desconto de título, é proibido ceder, transferir, onerar ou de qualquer forma alienar os direitos creditórios decorrentes de contratos, ordens de compra ou títulos de crédito que representem duplicatas e notas ficais, a terceiros, sejam eles empresas de fomento mercantil (factoring), fundos de investimento em direitos creditórios (fidc), instituições financeiras ou quaisquer outros cessionários, salvo mediante prévia e expressa autorização escrita da OEG.";
-    const footerText3 = "3.0 - As NFs e boletos emitidos em razão dessa ordem de compra devem ser enviados para o e-mail financebrasil@oegoffshore.com";
+    const footerTexts = [
+      "1.0 - Ao aceitar essa ordem de compra o fornecedor responde por danos causados a OEG e seus clientes, independentemente de culpa, bastando provar o nexo de causalidade entre defeito e dano e/ou responderá de forma direta ou solidariamente pelos vicios de qualidade ou quantidade.",
+      "2.0 - A OEG não aceita negociação de desconto de título, é proibido ceder, transferir, onerar ou de qualquer forma alienar os direitos creditórios decorrentes de contratos, ordens de compra ou títulos de crédito que representem duplicatas e notas ficais, a terceiros, sejam eles empresas de fomento mercantil (factoring), fundos de investimento em direitos creditórios (fidc), instituições financeiras ou quaisquer outros cessionários, salvo mediante prévia e expressa autorização escrita da OEG.",
+      "3.0 - As NFs e boletos emitidos em razão dessa ordem de compra devem ser enviados para o e-mail financebrasil@oegoffshore.com"
+    ];
     
-    doc.text(footerText1, 10, 270, { maxWidth: 180, align: 'justify' });
-    doc.text(footerText2, 10, 278, { maxWidth: 180, align: 'justify' });
-    doc.text(footerText3, 10, 290, { maxWidth: 180, align: 'justify' });
+    let currentFooterY = 268;
+    footerTexts.forEach(text => {
+      const lines = doc.splitTextToSize(text, 180);
+      doc.text(lines, 10, currentFooterY, { align: 'justify' });
+      currentFooterY += (lines.length * 3.5) + 2;
+    });
 
     doc.save(`OC_${po.number}.pdf`);
     await addNotification('PDF Gerado', `Ordem de compra #${po.number} salva com sucesso.`, 'success');
@@ -660,7 +671,7 @@ export default function OCList() {
           setIsEditAmountModalOpen(false);
           setSelectedPO(null);
         }}
-        onSubmit={(newAmount) => handleEditAmount(newAmount).catch(err => console.error('Error in handleEditAmount:', err))}
+        onSubmit={(newAmount, items) => handleEditAmount(newAmount, items).catch(err => console.error('Error in handleEditAmount:', err))}
         po={selectedPO}
       />
 

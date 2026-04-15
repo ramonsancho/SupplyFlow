@@ -193,7 +193,7 @@ export default function Layout() {
               Sair do Sistema
             </button>
           </div>
-          <p className="text-[10px] text-center text-slate-500 mt-4 font-medium tracking-widest uppercase opacity-50">Version 1.2.0</p>
+          <p className="text-[10px] text-center text-slate-500 mt-4 font-medium tracking-widest uppercase opacity-50">Version 1.3</p>
         </div>
       </aside>
 
