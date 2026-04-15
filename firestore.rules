@@ -55,6 +55,7 @@
 //   - totalAmount: number (required, positive)
 //   - originalAmount: number (optional, positive)
 //   - receivedAmount: number (required, positive)
+//   - receipts: list (optional, maps, max 100 items)
 //   - items: list (required, maps, max 50 items)
 //   - rating: number (optional, 0-10)
 //   - hasRNC: bool (optional)
@@ -168,6 +169,7 @@ service cloud.firestore {
              (!('originalAmount' in data) || (data.originalAmount is number && data.originalAmount >= 0)) &&
              data.receivedAmount is number && data.receivedAmount >= 0 &&
              data.items is list &&
+             (!('receipts' in data) || data.receipts is list) &&
              (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
              (!('hasRNC' in data) || data.hasRNC is bool) &&
              (!('completedAt' in data) || data.completedAt is timestamp) &&

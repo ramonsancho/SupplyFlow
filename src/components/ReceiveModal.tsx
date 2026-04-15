@@ -2,11 +2,12 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { X, Save, Package, DollarSign, AlertCircle } from 'lucide-react';
+import { X, Save, Package, DollarSign, AlertCircle, FileText } from 'lucide-react';
 import { PurchaseOrder } from '../types';
 
 const receiveSchema = z.object({
   amount: z.number().min(0.01, 'O valor deve ser maior que zero'),
+  invoiceNumber: z.string().min(1, 'Número da nota fiscal é obrigatório'),
 });
 
 type ReceiveFormData = z.infer<typeof receiveSchema>;
@@ -14,7 +15,7 @@ type ReceiveFormData = z.infer<typeof receiveSchema>;
 interface ReceiveModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (amount: number) => void;
+  onSubmit: (amount: number, invoiceNumber: string) => void;
   po: PurchaseOrder | null;
 }
 
@@ -26,13 +27,17 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
     resolver: zodResolver(receiveSchema),
     defaultValues: {
       amount: remaining > 0 ? remaining : 0,
+      invoiceNumber: '',
     }
   });
 
   React.useEffect(() => {
     if (isOpen && po) {
       setValidationError(null);
-      reset({ amount: po.totalAmount - po.receivedAmount });
+      reset({ 
+        amount: po.totalAmount - po.receivedAmount,
+        invoiceNumber: '',
+      });
     }
   }, [isOpen, po, reset]);
 
@@ -44,7 +49,7 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
       return;
     }
     setValidationError(null);
-    onSubmit(data.amount);
+    onSubmit(data.amount, data.invoiceNumber);
   };
 
   return (
@@ -81,6 +86,20 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
               <span>Saldo Pendente</span>
               <span>R$ {remaining.toLocaleString()}</span>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Número da Nota Fiscal</label>
+            <div className="relative">
+              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+              <input 
+                type="text"
+                {...register('invoiceNumber')}
+                className="w-full pl-10 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                placeholder="Ex: NF-12345"
+              />
+            </div>
+            {errors.invoiceNumber && <p className="text-xs text-red-500 font-medium">{errors.invoiceNumber.message}</p>}
           </div>
 
           <div className="space-y-2">

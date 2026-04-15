@@ -58,12 +58,26 @@
         "status": { "type": "string", "enum": ["draft", "pending_approval", "approved", "sent", "received", "closed"] },
         "totalAmount": { "type": "number" },
         "receivedAmount": { "type": "number" },
+        "receipts": { "type": "array", "items": { "$ref": "#/entities/Receipt" } },
         "items": { "type": "array", "items": { "$ref": "#/entities/POItem" } },
         "createdAt": { "type": "string", "format": "date-time" },
         "approvedBy": { "type": "string" },
         "approvedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["number", "supplierId", "status", "totalAmount"]
+    },
+    "Receipt": {
+      "title": "Receipt",
+      "description": "Registro de recebimento de mercadoria/serviço",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "amount": { "type": "number" },
+        "invoiceNumber": { "type": "string" },
+        "receivedAt": { "type": "string", "format": "date-time" },
+        "receivedBy": { "type": "string" }
+      },
+      "required": ["amount", "invoiceNumber", "receivedAt", "receivedBy"]
     },
     "POItem": {
       "title": "POItem",

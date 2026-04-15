@@ -17,13 +17,16 @@ import {
   Mail,
   Download,
   CheckSquare,
-  Star
+  Star,
+  Edit2
 } from 'lucide-react';
 import POModal from './POModal';
 import RatingModal from './RatingModal';
 import ReceiveModal from './ReceiveModal';
 import ConfirmModal from './ConfirmModal';
-import { PurchaseOrder, Supplier, User } from '../types';
+import ReceiptHistoryModal from './ReceiptHistoryModal';
+import EditAmountModal from './EditAmountModal';
+import { PurchaseOrder, Supplier, User, Receipt } from '../types';
 import { poService } from '../services/poService';
 import { emailService } from '../services/emailService';
 import { teamsService } from '../services/teamsService';
@@ -48,7 +51,8 @@ import {
   query,
   orderBy,
   getDocs,
-  where
+  where,
+  arrayUnion
 } from 'firebase/firestore';
 
 function cn(...inputs: ClassValue[]) {
@@ -59,6 +63,9 @@ export default function OCList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isEditAmountModalOpen, setIsEditAmountModalOpen] = useState(false);
+  const [selectedPOForHistory, setSelectedPOForHistory] = useState<PurchaseOrder | null>(null);
   const [poToDelete, setPoToDelete] = useState<{id: string, number: number} | null>(null);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
@@ -339,7 +346,7 @@ export default function OCList() {
     setIsReceiveModalOpen(true);
   };
 
-  const onReceiveSubmit = async (amount: number) => {
+  const onReceiveSubmit = async (amount: number, invoiceNumber: string) => {
     if (!selectedPO) return;
 
     try {
@@ -347,15 +354,24 @@ export default function OCList() {
       const isFullyReceived = newReceived >= selectedPO.totalAmount - 0.01; // Tolerance
       const newStatus = isFullyReceived ? 'received' : selectedPO.status;
       
+      const newReceipt: Receipt = {
+        id: crypto.randomUUID(),
+        amount,
+        invoiceNumber,
+        receivedAt: new Date().toISOString(),
+        receivedBy: auth.currentUser?.email || 'Unknown'
+      };
+
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), {
         receivedAmount: newReceived,
         status: newStatus,
+        receipts: arrayUnion(newReceipt),
         receivedAt: isFullyReceived ? serverTimestamp() : (selectedPO.receivedAt || null),
         updatedAt: serverTimestamp()
       });
 
       await addLog('Registrou Recebimento', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
-      await addNotification('Recebimento Registrado', `Recebimento de R$ ${amount.toLocaleString()} registrado para OC #${selectedPO.number}.`, 'info');
+      await addNotification('Recebimento Registrado', `Recebimento de R$ ${amount.toLocaleString()} (NF: ${invoiceNumber}) registrado para OC #${selectedPO.number}.`, 'info');
       setIsReceiveModalOpen(false);
       setSelectedPO(null);
     } catch (error) {
@@ -363,6 +379,29 @@ export default function OCList() {
         handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${selectedPO.id}`);
       } catch (e) {
         console.error('PO receive error:', e);
+      }
+    }
+  };
+
+  const handleEditAmount = async (newAmount: number) => {
+    if (!selectedPO) return;
+
+    try {
+      const oldAmount = selectedPO.totalAmount;
+      await updateDoc(doc(db, 'purchase-orders', selectedPO.id), {
+        totalAmount: newAmount,
+        updatedAt: serverTimestamp()
+      });
+
+      await addLog('Editou Valor OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
+      await addNotification('Valor Alterado', `O valor da OC #${selectedPO.number} foi alterado de R$ ${oldAmount.toLocaleString()} para R$ ${newAmount.toLocaleString()}.`, 'success');
+      setIsEditAmountModalOpen(false);
+      setSelectedPO(null);
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${selectedPO.id}`);
+      } catch (e) {
+        console.error('PO edit amount error:', e);
       }
     }
   };
@@ -552,9 +591,11 @@ export default function OCList() {
     doc.setFont('helvetica', 'italic');
     const footerText1 = "1.0 - Ao aceitar essa ordem de compra o fornecedor responde por danos causados a OEG e seus clientes, independentemente de culpa, bastando provar o nexo de causalidade entre defeito e dano e/ou responderá de forma direta ou solidariamente pelos vicios de qualidade ou quantidade.";
     const footerText2 = "2.0 - A OEG não aceita negociação de desconto de título, é proibido ceder, transferir, onerar ou de qualquer forma alienar os direitos creditórios decorrentes de contratos, ordens de compra ou títulos de crédito que representem duplicatas e notas ficais, a terceiros, sejam eles empresas de fomento mercantil (factoring), fundos de investimento em direitos creditórios (fidc), instituições financeiras ou quaisquer outros cessionários, salvo mediante prévia e expressa autorização escrita da OEG.";
+    const footerText3 = "3.0 - As NFs e boletos emitidos em razão dessa ordem de compra devem ser enviados para o e-mail financebrasil@oegoffshore.com";
     
     doc.text(footerText1, 10, 270, { maxWidth: 180, align: 'justify' });
-    doc.text(footerText2, 10, 282, { maxWidth: 180, align: 'justify' });
+    doc.text(footerText2, 10, 278, { maxWidth: 180, align: 'justify' });
+    doc.text(footerText3, 10, 290, { maxWidth: 180, align: 'justify' });
 
     doc.save(`OC_${po.number}.pdf`);
     await addNotification('PDF Gerado', `Ordem de compra #${po.number} salva com sucesso.`, 'success');
@@ -600,7 +641,26 @@ export default function OCList() {
           setIsReceiveModalOpen(false);
           setSelectedPO(null);
         }}
-        onSubmit={(amount) => onReceiveSubmit(amount).catch(err => console.error('Error in onReceiveSubmit:', err))}
+        onSubmit={(amount, invoiceNumber) => onReceiveSubmit(amount, invoiceNumber).catch(err => console.error('Error in onReceiveSubmit:', err))}
+        po={selectedPO}
+      />
+
+      <ReceiptHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => {
+          setIsHistoryModalOpen(false);
+          setSelectedPOForHistory(null);
+        }}
+        po={selectedPOForHistory}
+      />
+
+      <EditAmountModal
+        isOpen={isEditAmountModalOpen}
+        onClose={() => {
+          setIsEditAmountModalOpen(false);
+          setSelectedPO(null);
+        }}
+        onSubmit={(newAmount) => handleEditAmount(newAmount).catch(err => console.error('Error in handleEditAmount:', err))}
         po={selectedPO}
       />
 
@@ -703,7 +763,14 @@ export default function OCList() {
               return matchesSearch && matchesStatus;
             })
             .map((oc) => (
-            <div key={oc.id} className="bg-white rounded-3xl border border-[#E5E5E5] p-6 hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center gap-8">
+            <div 
+              key={oc.id} 
+              onClick={() => {
+                setSelectedPOForHistory(oc);
+                setIsHistoryModalOpen(true);
+              }}
+              className="bg-white rounded-3xl border border-[#E5E5E5] p-6 hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center gap-8 cursor-pointer group"
+            >
               <div className="flex-1 min-w-[200px]">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="font-mono text-sm font-bold text-[#141414]">#{oc.number}</span>
@@ -765,7 +832,10 @@ export default function OCList() {
               <div className="flex items-center gap-4">
                 {oc.status === 'pending_approval' && (
                   <button 
-                    onClick={() => handleApprove(oc).catch(err => console.error('Error in handleApprove:', err))}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
+                    }}
                     className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md"
                   >
                     <CheckCircle size={16} />
@@ -773,7 +843,10 @@ export default function OCList() {
                   </button>
                 )}
                 <button 
-                  onClick={() => generatePDF(oc).catch(err => console.error('Error in generatePDF:', err))}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    generatePDF(oc).catch(err => console.error('Error in generatePDF:', err));
+                  }}
                   disabled={oc.status === 'draft' || oc.status === 'pending_approval'}
                   className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#0052FF] rounded-lg hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                   title={oc.status === 'draft' || oc.status === 'pending_approval' ? "Aguardando Aprovação" : "Baixar PDF"}
@@ -782,16 +855,34 @@ export default function OCList() {
                   <span>PDF</span>
                 </button>
                 <button 
-                  onClick={() => handleReceive(oc)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReceive(oc);
+                  }}
                   disabled={oc.status === 'draft' || oc.status === 'pending_approval' || oc.status === 'received' || oc.status === 'closed'}
                   className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#141414] bg-[#F5F5F5] rounded-lg hover:bg-[#E5E5E5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Package size={16} />
                   <span>Receber</span>
                 </button>
+                {currentUserProfile?.role === 'Administrador' && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPO(oc);
+                      setIsEditAmountModalOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-all shadow-md"
+                    title="Editar Valor (Admin)"
+                  >
+                    <Edit2 size={16} />
+                    <span>Editar Valor</span>
+                  </button>
+                )}
                 {oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && (
                   <button 
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSelectedPO(oc);
                       setIsRatingModalOpen(true);
                     }}
@@ -804,7 +895,10 @@ export default function OCList() {
                   </button>
                 )}
                 <button 
-                  onClick={() => setPoToDelete({ id: oc.id, number: oc.number })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPoToDelete({ id: oc.id, number: oc.number });
+                  }}
                   className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
                   title="Excluir"
                 >

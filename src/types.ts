@@ -53,6 +53,14 @@ export type ProposalItem = {
   unitPrice: number;
 };
 
+export type Receipt = {
+  id: string;
+  amount: number;
+  invoiceNumber: string;
+  receivedAt: string;
+  receivedBy: string;
+};
+
 export type PurchaseOrder = {
   id: string;
   number: number;
@@ -64,6 +72,7 @@ export type PurchaseOrder = {
   totalAmount: number;
   originalAmount?: number; // Pre-negotiation or reference amount for savings calculation
   receivedAmount: number;
+  receipts?: Receipt[];
   items: POItem[];
   createdAt: string;
   createdBy?: string;
