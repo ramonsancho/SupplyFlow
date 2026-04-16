@@ -75,6 +75,8 @@ export type PurchaseOrder = {
   receipts?: Receipt[];
   items: POItem[];
   createdAt: string;
+  updatedAt?: string;
+  revision?: number;
   createdBy?: string;
   createdByName?: string;
   approvedBy?: string;

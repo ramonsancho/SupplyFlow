@@ -113,11 +113,7 @@ export default function OCList() {
           setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
         }
       }, (error) => {
-        try {
-          handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
-        } catch (e) {
-          console.error('OCList profile fetch error:', e);
-        }
+        handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
       });
 
       const qUsers = query(collection(db, 'users'));
@@ -125,11 +121,7 @@ export default function OCList() {
         const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
         setAllUsers(users);
       }, (error) => {
-        try {
-          handleFirestoreError(error, OperationType.LIST, 'users');
-        } catch (e) {
-          console.error('OCList users fetch error:', e);
-        }
+        handleFirestoreError(error, OperationType.LIST, 'users');
       });
 
       return () => {
@@ -213,8 +205,10 @@ export default function OCList() {
         receivedAmount: 0,
         totalAmount,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        revision: 0,
         createdBy: auth.currentUser?.uid,
-        createdByName: currentUserProfile?.name || 'Sistema',
+        createdByName: currentUserProfile?.name || auth.currentUser?.displayName || auth.currentUser?.email || 'Sistema',
       };
 
       // Se não for rascunho, verifica se precisa de aprovação
@@ -388,9 +382,11 @@ export default function OCList() {
 
     try {
       const oldAmount = selectedPO.totalAmount;
+      const newRevision = (selectedPO.revision || 0) + 1;
       const updateData: any = {
         totalAmount: newAmount,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        revision: newRevision
       };
 
       if (items) {
@@ -399,8 +395,8 @@ export default function OCList() {
 
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
 
-      await addLog('Editou Valor OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
-      await addNotification('OC Atualizada', `A OC #${selectedPO.number} foi atualizada com sucesso.`, 'success');
+      await addLog(`Editou OC (Rev ${newRevision})`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
+      await addNotification('OC Atualizada', `A OC #${selectedPO.number} foi atualizada para a revisão ${newRevision}.`, 'success');
       setIsEditAmountModalOpen(false);
       setSelectedPO(null);
     } catch (error) {
@@ -546,9 +542,16 @@ export default function OCList() {
     // PO Info
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`ORDEM DE COMPRA #${po.number}`, 10, 65);
+    const poNumberDisplay = po.revision && po.revision > 0 ? `#${po.number} rev${po.revision}` : `#${po.number}`;
+    doc.text(`ORDEM DE COMPRA ${poNumberDisplay}`, 10, 65);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Data de Emissão: ${new Date(po.createdAt).toLocaleDateString()}`, 150, 65);
+    
+    // Use updatedAt for revised POs, otherwise createdAt
+    const displayDate = po.revision && po.revision > 0 && po.updatedAt 
+      ? new Date(po.updatedAt).toLocaleDateString()
+      : new Date(po.createdAt).toLocaleDateString();
+      
+    doc.text(`Data de Emissão: ${displayDate}`, 150, 65);
 
     // Supplier Info
     doc.setFont('helvetica', 'bold');

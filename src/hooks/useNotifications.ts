@@ -39,11 +39,7 @@ export function useNotifications() {
     }, (error) => {
       // Only log if it's not a permission error during logout
       if (auth.currentUser) {
-        try {
-          handleFirestoreError(error, OperationType.LIST, 'notifications');
-        } catch (e) {
-          console.error('Notifications fetch error:', e);
-        }
+        handleFirestoreError(error, OperationType.LIST, 'notifications');
       }
     });
 
@@ -71,10 +67,8 @@ export function useNotifications() {
         read: false,
       });
     } catch (error) {
-      try {
+      if (auth.currentUser) {
         handleFirestoreError(error, OperationType.CREATE, 'notifications');
-      } catch (e) {
-        console.error('Failed to add notification:', e);
       }
     }
   }, []);
@@ -86,11 +80,7 @@ export function useNotifications() {
         updatedAt: serverTimestamp()
       });
     } catch (error) {
-      try {
-        handleFirestoreError(error, OperationType.UPDATE, `notifications/${id}`);
-      } catch (e) {
-        console.error('Failed to mark notification as read:', e);
-      }
+      handleFirestoreError(error, OperationType.UPDATE, `notifications/${id}`);
     }
   }, []);
 

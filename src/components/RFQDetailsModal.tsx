@@ -135,14 +135,14 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
           ...item,
           tax: 0 // Default tax
         })),
-        createdBy: currentUserProfile?.name || 'Sistema',
-        createdByName: currentUserProfile?.name || 'Sistema',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        revision: 0,
+        createdBy: auth.currentUser?.uid,
+        createdByName: currentUserProfile?.name || auth.currentUser?.displayName || auth.currentUser?.email || 'Sistema',
       }));
 
-      const poRef = await addDoc(collection(db, 'purchase-orders'), {
-        ...poPayload,
-        createdAt: serverTimestamp(),
-      });
+      const poRef = await addDoc(collection(db, 'purchase-orders'), poPayload);
 
       // 2. Atualizar status da proposta aceita
       await updateDoc(doc(db, 'proposals', proposal.id), {

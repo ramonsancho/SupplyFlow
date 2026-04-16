@@ -113,11 +113,7 @@ export default function UserList() {
       setUsers(userData);
       setIsLoading(false);
     }, (error) => {
-      try {
-        handleFirestoreError(error, OperationType.LIST, 'users');
-      } catch (e) {
-        console.error('UserList error:', e);
-      }
+      handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
     const checkApiHealth = async () => {

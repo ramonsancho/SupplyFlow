@@ -24,27 +24,60 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
+
+  public componentDidMount() {
+    window.addEventListener('error', this.handleGlobalError);
+    window.addEventListener('unhandledrejection', this.handleGlobalRejection);
+  }
+
+  public componentWillUnmount() {
+    window.removeEventListener('error', this.handleGlobalError);
+    window.removeEventListener('unhandledrejection', this.handleGlobalRejection);
+  }
+
+  private handleGlobalError = (event: ErrorEvent) => {
+    if (this.state.hasError) return;
+    this.setState({ hasError: true, error: event.error || new Error(event.message) });
+  };
+
+  private handleGlobalRejection = (event: PromiseRejectionEvent) => {
+    if (this.state.hasError) return;
+    const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+    this.setState({ hasError: true, error });
+  };
 
   public render() {
     if (this.state.hasError) {
-      let errorMessage = 'Ocorreu um erro inesperado.';
+      let errorMessage = 'Ocorreu um erro inesperado no sistema.';
       let errorDetails = '';
 
-      if (this.state.error && this.state.error.message) {
+      const rawMessage = this.state.error?.message || '';
+
+      if (rawMessage) {
         try {
-          if (this.state.error.message.startsWith('{')) {
-            const parsedError = JSON.parse(this.state.error.message);
-            if (parsedError.error === 'Missing or insufficient permissions.') {
-              errorMessage = 'Você não tem permissão para acessar este recurso.';
-              errorDetails = `Operação: ${parsedError.operationType} em ${parsedError.path}`;
+          if (rawMessage.includes('{"error":')) {
+            // Find the JSON part if it's mixed with other text
+            const jsonMatch = rawMessage.match(/\{"error":.*\}/);
+            const jsonStr = jsonMatch ? jsonMatch[0] : rawMessage;
+            const parsedError = JSON.parse(jsonStr);
+            
+            if (parsedError.error?.toLowerCase().includes('permissions') || 
+                parsedError.error?.toLowerCase().includes('permissão')) {
+              errorMessage = 'Acesso Negado: Você não tem as permissões necessárias para realizar esta operação.';
+              errorDetails = `Operação: ${parsedError.operationType?.toUpperCase()} | Caminho: ${parsedError.path}`;
+            } else {
+              errorMessage = parsedError.error || errorMessage;
             }
+          } else if (rawMessage.toLowerCase().includes('permissions') || 
+                     rawMessage.toLowerCase().includes('permissão')) {
+            errorMessage = 'Acesso Negado: Suas permissões atuais não permitem esta ação.';
           } else {
-            errorMessage = this.state.error.message;
+            errorMessage = rawMessage;
           }
         } catch (e) {
-          errorMessage = this.state.error.message;
+          errorMessage = rawMessage;
         }
       }
 

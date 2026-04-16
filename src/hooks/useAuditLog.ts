@@ -16,10 +16,8 @@ export function useAuditLog() {
       })) as AuditLog[];
       setLogs(logData);
     }, (error) => {
-      try {
+      if (auth.currentUser) {
         handleFirestoreError(error, OperationType.LIST, 'audit-logs');
-      } catch (e) {
-        console.error('useAuditLog error:', e);
       }
       setLogs([]);
     });
@@ -38,10 +36,8 @@ export function useAuditLog() {
         timestamp: serverTimestamp(),
       });
     } catch (error) {
-      try {
+      if (auth.currentUser) {
         handleFirestoreError(error, OperationType.CREATE, 'audit-logs');
-      } catch (e) {
-        console.error('Failed to add audit log:', e);
       }
     }
   }, []);
