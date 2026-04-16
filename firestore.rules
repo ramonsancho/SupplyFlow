@@ -164,7 +164,7 @@ service cloud.firestore {
       return hasRequiredFields(['number', 'supplierId', 'supplierName', 'status', 'totalAmount', 'receivedAmount', 'items', 'createdAt']) &&
              data.number is int &&
              data.supplierId is string &&
-             data.status in ['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed'] &&
+             data.status in ['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled'] &&
              data.totalAmount is number && data.totalAmount >= 0 &&
              (!('originalAmount' in data) || (data.originalAmount is number && data.originalAmount >= 0)) &&
              data.receivedAmount is number && data.receivedAmount >= 0 &&
@@ -179,6 +179,8 @@ service cloud.firestore {
              (!('createdBy' in data) || data.createdBy is string) &&
              (!('createdByName' in data) || data.createdByName is string) &&
              (!('family' in data) || data.family is string) &&
+             (!('revision' in data) || data.revision is int) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
              data.createdAt is timestamp;
     }
 

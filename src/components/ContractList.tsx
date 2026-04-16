@@ -13,7 +13,7 @@ import {
   XCircle,
   Clock
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Contract, Supplier } from '../types';
 import ContractModal from './ContractModal';
@@ -212,14 +212,14 @@ export default function ContractList() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-xs text-[#141414]">
                       <Calendar size={14} className="text-[#8E9299]" />
-                      <span>{new Date(contract.startDate).toLocaleDateString()} - {new Date(contract.endDate).toLocaleDateString()}</span>
+                      <span>{formatDate(contract.startDate)} - {formatDate(contract.endDate)}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     {contract.lastAdjustmentDate ? (
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-[#141414]">
-                          {contract.lastAdjustmentPercentage}% em {new Date(contract.lastAdjustmentDate).toLocaleDateString()}
+                          {contract.lastAdjustmentPercentage}% em {formatDate(contract.lastAdjustmentDate)}
                         </span>
                         <span className="text-[10px] text-[#8E9299] uppercase tracking-tighter">Reajuste aplicado</span>
                       </div>

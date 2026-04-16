@@ -36,7 +36,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -562,8 +562,8 @@ export default function OCList() {
     
     // Use updatedAt for revised POs, otherwise createdAt
     const displayDate = po.revision && po.revision > 0 && po.updatedAt 
-      ? new Date(po.updatedAt).toLocaleDateString()
-      : new Date(po.createdAt).toLocaleDateString();
+      ? formatDate(po.updatedAt)
+      : formatDate(po.createdAt);
       
     doc.text(`Data de Emissão: ${displayDate}`, 150, 65);
 
@@ -820,11 +820,11 @@ export default function OCList() {
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-[#141414]">{oc.supplierName}</h3>
-                <p className="text-xs text-[#8E9299] mt-1">Emitida em {new Date(oc.createdAt).toLocaleDateString()}</p>
+                <p className="text-xs text-[#8E9299] mt-1">Emitida em {formatDate(oc.createdAt)}</p>
                 {oc.deliveryDate && (
                   <p className="text-xs text-brand-600 font-bold mt-1 flex items-center gap-1">
                     <Calendar size={12} />
-                    Entrega: {new Date(oc.deliveryDate).toLocaleDateString()}
+                    Entrega: {formatDate(oc.deliveryDate)}
                   </p>
                 )}
                 {oc.createdByName && (

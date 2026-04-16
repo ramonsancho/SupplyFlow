@@ -49,6 +49,27 @@ export interface FirestoreErrorInfo {
   }
 }
 
+export function formatDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return 'N/A';
+  
+  // If it's a YYYY-MM-DD string (e.g. from <input type="date">)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  }
+  
+  // If it's already a full ISO string or Date, use toLocaleDateString
+  // But be careful: new Date('YYYY-MM-DD') is UTC, causing offset issues.
+  // So we favor the regex check above.
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('pt-BR');
+  } catch (e) {
+    return dateStr;
+  }
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),

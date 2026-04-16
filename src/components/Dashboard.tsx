@@ -14,7 +14,7 @@ import {
   Area
 } from 'recharts';
 import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight, FileText, Users, ShoppingBag, Target, Calendar } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { PurchaseOrder, RFQ, Supplier, Proposal } from '../types';
 import { clsx, type ClassValue } from 'clsx';
@@ -620,7 +620,7 @@ export default function Dashboard() {
                         isOverdue ? "text-rose-600" : "text-slate-500"
                       )}>
                         <Calendar size={12} />
-                        {isOverdue ? 'Vencido em' : 'Vence em'} {deliveryDate.toLocaleDateString()}
+                        {isOverdue ? 'Vencido em' : 'Vence em'} {formatDate(po.deliveryDate)}
                       </p>
                       <span className="w-1 h-1 rounded-full bg-slate-300" />
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">R$ {po.totalAmount.toLocaleString()}</p>

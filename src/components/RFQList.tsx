@@ -22,7 +22,7 @@ import ConfirmModal from './ConfirmModal';
 import RFQDetailsModal from './RFQDetailsModal';
 import { RFQ } from '../types';
 import { emailService } from '../services/emailService';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, deleteDoc, getDoc, getDocs, where, updateDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
@@ -167,7 +167,7 @@ export default function RFQList() {
                 `).join('')}
               </tbody>
             </table>
-            <p><strong>Data Desejada para Entrega:</strong> ${new Date(rfq.desiredDate).toLocaleDateString()}</p>
+            <p><strong>Data Desejada para Entrega:</strong> ${formatDate(rfq.desiredDate)}</p>
             <p>Por favor, envie sua proposta respondendo a este e-mail ou através do nosso portal.</p>
             <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 20px 0;" />
             <p style="font-size: 12px; color: #8E9299;">Atenciosamente,<br /><strong>${userProfile?.name || 'Equipe de Compras'}</strong><br />SupplyFlow Management System</p>
@@ -219,9 +219,9 @@ export default function RFQList() {
     doc.text('SOLICITAÇÃO DE COTAÇÃO (RFQ)', 105, 62, { align: 'center' });
     doc.text(`#${rfq.number}`, 10, 69);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Data de Emissão: ${new Date(rfq.createdAt).toLocaleDateString()}`, 150, 69);
+    doc.text(`Data de Emissão: ${formatDate(rfq.createdAt)}`, 150, 69);
     doc.setFontSize(10);
-    doc.text(`Data Desejada: ${new Date(rfq.desiredDate).toLocaleDateString()}`, 10, 75);
+    doc.text(`Data Desejada: ${formatDate(rfq.desiredDate)}`, 10, 75);
     if (rfq.family) doc.text(`Família: ${rfq.family}`, 10, 81);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
@@ -459,7 +459,7 @@ export default function RFQList() {
                     <td className="px-8 py-6">
                       <p className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{rfq.title}</p>
                       <div className="flex items-center gap-3 mt-1.5">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Criado em {new Date(rfq.createdAt).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Criado em {formatDate(rfq.createdAt)}</p>
                         {rfq.family && (
                           <div className="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded-md text-[9px] font-bold text-slate-500 uppercase tracking-widest group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors">
                             <Tag size={10} />
@@ -477,7 +477,7 @@ export default function RFQList() {
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2.5 text-sm font-bold text-slate-700">
                         <Calendar size={16} className="text-slate-300" />
-                        <span>{new Date(rfq.desiredDate).toLocaleDateString()}</span>
+                        <span>{formatDate(rfq.desiredDate)}</span>
                       </div>
                     </td>
                     <td className="px-8 py-6">

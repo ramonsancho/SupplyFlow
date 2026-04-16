@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, FileText, Calendar, Tag, CheckCircle2, Clock, AlertCircle, ShoppingCart } from 'lucide-react';
 import { RFQ, Proposal, User, PurchaseOrder } from '../types';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy, getDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
@@ -120,27 +120,30 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
       
       const totalAmount = Math.round(proposal.totalValue * 100) / 100;
       
-      // Final safety check to remove any undefined values that Firestore rejects
-      const poPayload = JSON.parse(JSON.stringify({
+      // Prepare payload manually to avoid stripping serverTimestamp with JSON.stringify
+      const poPayload: any = {
         number: poNumber,
-        proposalId: proposal.id,
+        proposalId: proposal.id || '',
         supplierId: proposal.supplierId,
         supplierName: proposal.supplierName,
-        family: rfq.family,
+        family: rfq.family || '',
         deliveryDate: proposal.deliveryDate,
         status: 'pending_approval',
         totalAmount: totalAmount,
         receivedAmount: 0,
         items: (proposal.items || []).map(item => ({
-          ...item,
-          tax: 0 // Default tax
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          tax: 0
         })),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         revision: 0,
         createdBy: auth.currentUser?.uid,
         createdByName: currentUserProfile?.name || auth.currentUser?.displayName || auth.currentUser?.email || 'Sistema',
-      }));
+      };
 
       const poRef = await addDoc(collection(db, 'purchase-orders'), poPayload);
 
@@ -270,7 +273,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                   <Tag size={12} /> {rfq.family || 'Sem Família'}
                 </span>
                 <span className="text-xs font-bold text-[#8E9299] uppercase tracking-widest flex items-center gap-1">
-                  <Calendar size={12} /> {new Date(rfq.desiredDate).toLocaleDateString()}
+                  <Calendar size={12} /> {formatDate(rfq.desiredDate)}
                 </span>
               </div>
             </div>
@@ -330,13 +333,13 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                         <div>
                           <h5 className="text-base font-bold text-[#141414]">{proposal.supplierName}</h5>
                           <p className="text-xs text-[#8E9299] mt-1">
-                            Recebida em {new Date(proposal.createdAt).toLocaleDateString()}
+                            Recebida em {formatDate(proposal.createdAt)}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-[#141414]">R$ {(proposal.totalValue || 0).toLocaleString()}</p>
                           <p className="text-[10px] text-[#8E9299] font-bold uppercase tracking-widest">
-                            Entrega: {new Date(proposal.deliveryDate).toLocaleDateString()}
+                            Entrega: {formatDate(proposal.deliveryDate)}
                           </p>
                         </div>
                       </div>
