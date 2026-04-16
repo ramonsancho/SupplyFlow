@@ -16,8 +16,11 @@ export function useAuditLog() {
       })) as AuditLog[];
       setLogs(logData);
     }, (error) => {
-      if (auth.currentUser) {
-        handleFirestoreError(error, OperationType.LIST, 'audit-logs');
+      // SIlently handle permission errors for non-admin users to avoid crashing the whole UI
+      if (error.code !== 'permission-denied') {
+        if (auth.currentUser) {
+          handleFirestoreError(error, OperationType.LIST, 'audit-logs');
+        }
       }
       setLogs([]);
     });
