@@ -589,23 +589,25 @@ export default function OCList() {
     doc.setFont('helvetica', 'bold');
     const createdByText = `OC CRIADA POR: ${po.createdByName || po.createdBy || 'N/A'}`;
     const approvedByText = `OC APROVADA POR: ${po.approvedByName || po.approvedBy || 'N/A'}`;
-    doc.text(createdByText, 10, 260);
-    doc.text(approvedByText, 110, 260);
+    doc.text(createdByText, 10, 258);
+    doc.text(approvedByText, 110, 258);
 
     // Footer Disclaimer
     doc.setFontSize(7);
     doc.setFont('helvetica', 'italic');
     const footerTexts = [
-      "1.0 - Ao aceitar essa ordem de compra o fornecedor responde por danos causados a OEG e seus clientes, independentemente de culpa, bastando provar o nexo de causalidade entre defeito e dano e/ou responderá de forma direta ou solidariamente pelos vicios de qualidade ou quantidade.",
-      "2.0 - A OEG não aceita negociação de desconto de título, é proibido ceder, transferir, onerar ou de qualquer forma alienar os direitos creditórios decorrentes de contratos, ordens de compra ou títulos de crédito que representem duplicatas e notas ficais, a terceiros, sejam eles empresas de fomento mercantil (factoring), fundos de investimento em direitos creditórios (fidc), instituições financeiras ou quaisquer outros cessionários, salvo mediante prévia e expressa autorização escrita da OEG.",
+      "1.0 - Ao aceitar essa ordem de compra o fornecedor responde por danos causados a OEG e seus clientes, independentemente de culpa, bastando provar o nexo\nde causalidade entre defeito e dano e/ou responderá de forma direta ou solidariamente pelos vicios de qualidade ou quantidade.",
+      "2.0 - A OEG não aceita negociação de desconto de título, é proibido ceder, transferir, onerar ou de qualquer forma alienar os direitos creditórios decorrentes\nde contratos, ordens de compra ou títulos de crédito que representem duplicatas e notas ficais, a terceiros, sejam eles empresas de fomento mercantil (factoring), fundos\nde investimento em direitos creditórios (fidc), instituições financeiras ou quaisquer outros cessionários, salvo mediante prévia e expressa autorização escrita da OEG.",
       "3.0 - As NFs e boletos emitidos em razão dessa ordem de compra devem ser enviados para o e-mail financebrasil@oegoffshore.com"
     ];
     
-    let currentFooterY = 268;
+    // Total lines calculation to ensure it ends at 2mm from bottom (Y=295) if possible, 
+    // but start below names (Y=258). Starting at 270 as requested.
+    let currentFooterY = 270;
     footerTexts.forEach(text => {
-      const lines = doc.splitTextToSize(text, 180);
-      doc.text(lines, 10, currentFooterY, { align: 'justify' });
-      currentFooterY += (lines.length * 3.5) + 2;
+      const lines = doc.splitTextToSize(text, 194);
+      doc.text(lines, 8, currentFooterY, { align: 'justify', maxWidth: 194 });
+      currentFooterY += (lines.length * 2.8) + 1.8;
     });
 
     doc.save(`OC_${po.number}.pdf`);
