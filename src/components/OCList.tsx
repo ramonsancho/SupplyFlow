@@ -142,6 +142,7 @@ export default function OCList() {
           ...d,
           id: doc.id,
           createdAt: d.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updatedAt: d.updatedAt?.toDate?.()?.toISOString() || null,
           approvedAt: d.approvedAt?.toDate?.()?.toISOString() || null,
           receivedAt: d.receivedAt?.toDate?.()?.toISOString() || null,
           completedAt: d.completedAt?.toDate?.()?.toISOString() || null
@@ -626,6 +627,14 @@ export default function OCList() {
       doc.text(lines, 8, currentFooterY, { align: 'justify', maxWidth: 194 });
       currentFooterY += (lines.length * 2.8) + 1.8;
     });
+
+    // Watermark if cancelled - Added at the end as a "stamp" in the foreground
+    if (po.status === 'cancelled') {
+      doc.setFontSize(60);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 180, 180); // Light red "stamp"
+      doc.text('CANCELADA', 45, 185, { angle: 45 });
+    }
 
     doc.save(`OC_${po.number}.pdf`);
     await addNotification('PDF Gerado', `Ordem de compra #${po.number} salva com sucesso.`, 'success');

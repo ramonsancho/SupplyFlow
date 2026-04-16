@@ -62,11 +62,16 @@ export function formatDate(dateStr: string | undefined | null): string {
   // But be careful: new Date('YYYY-MM-DD') is UTC, causing offset issues.
   // So we favor the regex check above.
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
+    // If it's a Firestore Timestamp object with toDate()
+    if (dateStr && typeof (dateStr as any).toDate === 'function') {
+      return (dateStr as any).toDate().toLocaleDateString('pt-BR');
+    }
+    
+    const d = new Date(dateStr as string);
+    if (isNaN(d.getTime())) return dateStr as string;
     return d.toLocaleDateString('pt-BR');
   } catch (e) {
-    return dateStr;
+    return dateStr as string;
   }
 }
 

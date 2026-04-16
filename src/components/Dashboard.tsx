@@ -36,7 +36,7 @@ export default function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState(30);
 
   const criticalAlerts = pos.filter(po => {
-    if (po.status === 'received' || po.status === 'closed' || po.status === 'draft') return false;
+    if (po.status === 'received' || po.status === 'closed' || po.status === 'draft' || po.status === 'cancelled') return false;
     if (po.receivedAmount > 0) return false;
     if (!po.deliveryDate) return false;
     
@@ -59,6 +59,7 @@ export default function Dashboard() {
           ...d, 
           id: doc.id,
           createdAt: d.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updatedAt: d.updatedAt?.toDate?.()?.toISOString() || null,
           approvedAt: d.approvedAt?.toDate?.()?.toISOString() || null,
           receivedAt: d.receivedAt?.toDate?.()?.toISOString() || null
         };
@@ -129,8 +130,11 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Filter data based on selected period
+  // Filter data based on selected period and status
   const filteredPOs = pos.filter(po => {
+    // Only count non-draft and non-cancelled POs for dashboard metrics
+    if (po.status === 'draft' || po.status === 'cancelled') return false;
+    
     if (selectedPeriod === 0) return true;
     const poDate = new Date(po.createdAt);
     const cutoff = new Date();
@@ -150,6 +154,10 @@ export default function Dashboard() {
   const totalSpent = filteredPOs.reduce((acc, po) => acc + (po.totalAmount || 0), 0);
   
   const totalSavings = filteredRFQs.reduce((acc, rfq) => {
+    // Check if there is an associated valid PO (not cancelled)
+    const associatedPO = pos.find(p => p.proposalId && proposals.some(prop => prop.rfqId === rfq.id && prop.id === p.proposalId));
+    if (associatedPO && associatedPO.status === 'cancelled') return acc;
+
     const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
     const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
     if (acceptedProposal && rfqProposals.length >= 2) {
