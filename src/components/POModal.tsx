@@ -11,7 +11,7 @@ const poSchema = z.object({
   supplierId: z.string().min(1, 'Selecione um fornecedor'),
   family: z.string().optional(),
   deliveryDate: z.string().min(1, 'Data de entrega obrigatória'),
-  status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed']),
+  status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled']),
   items: z.array(z.object({
     description: z.string().min(3, 'Descrição obrigatória'),
     quantity: z.number().min(1, 'Quantidade deve ser pelo menos 1'),

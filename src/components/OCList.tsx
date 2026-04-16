@@ -18,7 +18,8 @@ import {
   Download,
   CheckSquare,
   Star,
-  Edit2
+  Edit2,
+  XCircle
 } from 'lucide-react';
 import POModal from './POModal';
 import RatingModal from './RatingModal';
@@ -67,6 +68,7 @@ export default function OCList() {
   const [isEditAmountModalOpen, setIsEditAmountModalOpen] = useState(false);
   const [selectedPOForHistory, setSelectedPOForHistory] = useState<PurchaseOrder | null>(null);
   const [poToDelete, setPoToDelete] = useState<{id: string, number: number} | null>(null);
+  const [poToCancel, setPoToCancel] = useState<{id: string, number: number} | null>(null);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -472,11 +474,21 @@ export default function OCList() {
       await addLog('Excluiu OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
       await addNotification('OC Excluída', `A ordem de compra #${number} foi removida.`, 'warning');
     } catch (error) {
-      try {
-        handleFirestoreError(error, OperationType.DELETE, `purchase-orders/${id}`);
-      } catch (e) {
-        console.error('PO delete error:', e);
-      }
+      handleFirestoreError(error, OperationType.DELETE, `purchase-orders/${id}`);
+    }
+  };
+
+  const handleCancelPO = async (id: string, number: number) => {
+    try {
+      await updateDoc(doc(db, 'purchase-orders', id), {
+        status: 'cancelled',
+        updatedAt: serverTimestamp()
+      });
+      await addLog('Cancelou OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
+      await addNotification('OC Cancelada', `A ordem de compra #${number} foi cancelada.`, 'error');
+      setPoToCancel(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${id}`);
     }
   };
 
@@ -488,6 +500,7 @@ export default function OCList() {
       case 'sent': return 'bg-orange-100 text-orange-600';
       case 'received': return 'bg-green-100 text-green-600';
       case 'closed': return 'bg-purple-100 text-purple-600';
+      case 'cancelled': return 'bg-red-100 text-red-600';
       default: return 'bg-gray-100 text-gray-600';
     }
   };
@@ -500,6 +513,7 @@ export default function OCList() {
       case 'sent': return 'Enviado';
       case 'received': return 'Recebido';
       case 'closed': return 'Fechado';
+      case 'cancelled': return 'Cancelado';
       default: return status;
     }
   };
@@ -681,6 +695,16 @@ export default function OCList() {
       />
 
       <ConfirmModal
+        isOpen={!!poToCancel}
+        onClose={() => setPoToCancel(null)}
+        onConfirm={() => poToCancel && handleCancelPO(poToCancel.id, poToCancel.number).catch(err => console.error('Error in handleCancelPO:', err))}
+        title="Cancelar Ordem de Compra"
+        message={`Tem certeza que deseja cancelar a OC #${poToCancel?.number}? Esta ação marcará a ordem como cancelada.`}
+        confirmText="Cancelar Ordem"
+        variant="danger"
+      />
+
+      <ConfirmModal
         isOpen={!!poToDelete}
         onClose={() => setPoToDelete(null)}
         onConfirm={() => poToDelete && handleDeletePO(poToDelete.id, poToDelete.number).catch(err => console.error('Error in handleDeletePO:', err))}
@@ -735,7 +759,8 @@ export default function OCList() {
                       { label: 'Pendente', value: 'pending_approval' },
                       { label: 'Aprovado', value: 'approved' },
                       { label: 'Recebido', value: 'received' },
-                      { label: 'Fechado', value: 'closed' }
+                      { label: 'Fechado', value: 'closed' },
+                      { label: 'Cancelado', value: 'cancelled' }
                     ].map((btn) => (
                       <button 
                         key={String(btn.value)}
@@ -875,12 +900,25 @@ export default function OCList() {
                     e.stopPropagation();
                     handleReceive(oc);
                   }}
-                  disabled={oc.status === 'draft' || oc.status === 'pending_approval' || oc.status === 'received' || oc.status === 'closed'}
+                  disabled={oc.status === 'draft' || oc.status === 'pending_approval' || oc.status === 'received' || oc.status === 'closed' || oc.status === 'cancelled'}
                   className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#141414] bg-[#F5F5F5] rounded-lg hover:bg-[#E5E5E5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Package size={16} />
                   <span>Receber</span>
                 </button>
+                {(oc.status === 'approved' || oc.status === 'sent') && oc.receivedAmount === 0 && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPoToCancel({ id: oc.id, number: oc.number });
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all shadow-md"
+                    title="Cancelar Ordem"
+                  >
+                    <XCircle size={16} />
+                    <span>Cancelar</span>
+                  </button>
+                )}
                 {currentUserProfile?.role === 'Administrador' && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
                   <button 
                     onClick={(e) => {
@@ -895,7 +933,7 @@ export default function OCList() {
                     <span>Editar Valor</span>
                   </button>
                 )}
-                {oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && (
+                {oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && oc.status !== 'cancelled' && (
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();

@@ -68,7 +68,7 @@ export type PurchaseOrder = {
   supplierId: string;
   supplierName: string;
   family?: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'sent' | 'received' | 'closed';
+  status: 'draft' | 'pending_approval' | 'approved' | 'sent' | 'received' | 'closed' | 'cancelled';
   totalAmount: number;
   originalAmount?: number; // Pre-negotiation or reference amount for savings calculation
   receivedAmount: number;
