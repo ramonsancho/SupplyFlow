@@ -132,6 +132,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         totalAmount: totalAmount,
         receivedAmount: 0,
         items: (proposal.items || []).map(item => ({
+          id: (item as any).id || crypto.randomUUID(),
           description: item.description,
           quantity: item.quantity,
           unit: item.unit,

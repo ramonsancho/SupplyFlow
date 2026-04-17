@@ -13,6 +13,7 @@ const poSchema = z.object({
   deliveryDate: z.string().min(1, 'Data de entrega obrigatória'),
   status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled']),
   items: z.array(z.object({
+    id: z.string().optional(),
     description: z.string().min(3, 'Descrição obrigatória'),
     quantity: z.number().min(1, 'Quantidade deve ser pelo menos 1'),
     unit: z.string().min(1, 'Unidade obrigatória'),
@@ -54,7 +55,10 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
         family: initialData?.family || '',
         deliveryDate: initialData?.deliveryDate || '',
         status: initialData?.status || 'draft',
-        items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
+        items: (initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }]).map(item => ({
+          ...item,
+          id: (item as any).id || crypto.randomUUID()
+        })),
       });
     }
   }, [isOpen, initialData, reset]);
@@ -181,7 +185,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Itens do Pedido</label>
               <button 
                 type="button"
-                onClick={() => append({ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 })}
+                onClick={() => append({ id: crypto.randomUUID(), description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 })}
                 className="flex items-center gap-2 text-xs font-bold text-[#141414] bg-[#F5F5F5] px-3 py-2 rounded-lg hover:bg-[#E5E5E5] transition-all"
               >
                 <Plus size={16} />

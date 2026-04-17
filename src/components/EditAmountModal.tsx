@@ -7,7 +7,7 @@ import { PurchaseOrder, POItem } from '../types';
 
 const editAmountSchema = z.object({
   items: z.array(z.object({
-    id: z.string(),
+    id: z.string().optional(),
     description: z.string().min(1, 'Descrição é obrigatória'),
     quantity: z.number().min(0.01, 'Qtd deve ser maior que zero'),
     unit: z.string().min(1, 'Unidade é obrigatória'),
@@ -44,8 +44,19 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
 
   React.useEffect(() => {
     if (isOpen && po) {
+      // Ensure all items have IDs and default values to prevent schema validation failures
+      const itemsWithIds = (po.items || []).map(item => ({
+        ...item,
+        id: (item as any).id || crypto.randomUUID(),
+        tax: item.tax ?? 0,
+        description: item.description || '',
+        quantity: item.quantity ?? 1,
+        unit: item.unit || 'UN',
+        unitPrice: item.unitPrice ?? 0
+      }));
+
       reset({ 
-        items: po.items,
+        items: itemsWithIds,
         totalAmount: po.totalAmount 
       });
     }
@@ -55,7 +66,8 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
   const calculatedTotal = watchedItems?.reduce((acc, item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
-    return acc + (qty * price);
+    const tax = Number(item.tax) || 0;
+    return acc + (qty * price) + tax;
   }, 0) || 0;
 
   if (!isOpen || !po) return null;
@@ -73,7 +85,13 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
           </button>
         </div>
 
-        <form onSubmit={handleSubmit((data) => onSubmit(calculatedTotal, data.items as POItem[]))} className="flex-1 overflow-y-auto p-8 space-y-6">
+        <form 
+          onSubmit={handleSubmit(
+            (data) => onSubmit(calculatedTotal, data.items as POItem[]),
+            (err) => console.error("Validation errors:", err)
+          )} 
+          className="flex-1 overflow-y-auto p-8 space-y-6"
+        >
           <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
             <AlertCircle className="text-blue-500 shrink-0 mt-0.5" size={18} />
             <p className="text-xs text-blue-700 font-medium leading-relaxed">
