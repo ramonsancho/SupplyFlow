@@ -1,4 +1,4 @@
-import { auth } from '../firebase';
+import { auth, getAuthToken } from '../firebase';
 
 export interface EmailPayload {
   to: string | string[];
@@ -19,9 +19,13 @@ export const emailService = {
       subject: payload.subject,
       fromName: payload.fromName 
     });
+    const token = await getAuthToken();
     const response = await fetch('/api/send-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
         ...payload,
         replyTo: auth.currentUser?.email,

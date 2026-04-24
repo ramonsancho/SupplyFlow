@@ -3,10 +3,25 @@ import nodemailer from "nodemailer";
 import admin from "firebase-admin";
 import fs from "fs";
 import path from "path";
-import https from "https";
 import "dotenv/config";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 
 const app = express();
+
+// Security Headers - Temporarily disabled to troubleshoot Vite integration
+// app.use(helmet({
+//   contentSecurityPolicy: false, // Vite handles CSP in dev
+// }));
+
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: "Muitas requisições, tente novamente mais tarde." }
+});
+app.use("/api/", limiter);
+
 app.use(express.json());
 
 // Initialize Firebase Admin
@@ -52,6 +67,63 @@ app.use((req, res, next) => {
   next();
 });
 
+// Global error handlers for Node.js
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[Server] Uncaught Exception:', error);
+});
+
+// Global error handlers for Node.js
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[Server] Uncaught Exception:', error);
+});
+
+// Middlewares de Segurança
+const authenticate = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.warn(`[Auth] Tentativa de acesso sem token: ${req.method} ${req.path}`);
+    return res.status(401).json({ error: "Autenticação necessária." });
+  }
+
+  const idToken = authHeader.split("Bearer ")[1];
+  if (!idToken || idToken === "null") {
+    return res.status(401).json({ error: "Token ausente ou inválido." });
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = decodedToken;
+    
+    // Check role in Firestore
+    const userDoc = await admin.firestore().collection("users").doc(decodedToken.uid).get();
+    req.userData = userDoc.exists ? userDoc.data() : null;
+    
+    const bootstrapAdmins = (process.env.BOOTSTRAP_ADMINS || "").split(",").map(e => e.trim().toLowerCase());
+    req.isAdmin = req.userData?.role === "Administrador" || 
+                  (decodedToken.email && bootstrapAdmins.includes(decodedToken.email.toLowerCase()));
+    
+    next();
+  } catch (error) {
+    console.error("[Auth] Token inválido:", error);
+    res.status(401).json({ error: "Sessão inválida ou expirada." });
+  }
+};
+
+const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.isAdmin) {
+    return res.status(403).json({ error: "Acesso restrito a administradores." });
+  }
+  next();
+};
+
 // Rotas de API
 const apiRouter = express.Router();
 
@@ -60,19 +132,12 @@ apiRouter.get("/health", (req, res) => {
     status: "ok", 
     mode: process.env.NODE_ENV || 'development',
     firebaseAdmin: admin.apps.length > 0 ? "initialized" : "not_initialized",
-    hasServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
-    smtpConfig: {
-      host: process.env.SMTP_HOST || "not_set",
-      user: process.env.SMTP_USER || "not_set",
-      hasPass: !!process.env.SMTP_PASS,
-      port: process.env.SMTP_PORT || "587",
-      from: process.env.SMTP_FROM || "not_set"
-    },
+    smtpStatus: process.env.SMTP_HOST ? "configured" : "missing",
     time: new Date().toISOString()
   });
 });
 
-apiRouter.post("/send-email", async (req, res) => {
+apiRouter.post("/send-email", authenticate, async (req, res) => {
   const { to, subject, html, text, replyTo, fromName } = req.body;
   console.log(`[Email] Tentativa de envio para: ${to}`);
 
@@ -158,75 +223,7 @@ apiRouter.post("/send-email", async (req, res) => {
   }
 });
 
-apiRouter.post("/send-teams", async (req, res) => {
-  const { webhookUrl, title, text, sections, potentialAction } = req.body;
-
-  if (!webhookUrl) {
-    return res.status(400).json({ error: "Webhook URL não informada." });
-  }
-
-  // Payload no formato MessageCard (padrão para Incoming Webhooks)
-  const payload = {
-    "@type": "MessageCard",
-    "@context": "http://schema.org/extensions",
-    "themeColor": "0052FF",
-    "summary": title,
-    "title": title,
-    "text": text,
-    "sections": sections,
-    "potentialAction": potentialAction
-  };
-
-  try {
-    console.log(`[Teams] Enviando para: ${webhookUrl.substring(0, 50)}...`);
-    
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const responseText = await response.text();
-    
-    if (response.ok) {
-      console.log(`[Teams] Sucesso! Resposta: ${responseText}`);
-      return res.json({ success: true, details: responseText });
-    } else {
-      console.error(`[Teams] Erro do Teams (${response.status}): ${responseText}`);
-      
-      // Se falhou com o payload complexo, tenta um payload ultra-simples como fallback
-      console.log(`[Teams] Tentando fallback com payload simples...`);
-      const simplePayload = { text: `${title}: ${text}` };
-      
-      const retryResponse = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(simplePayload)
-      });
-
-      if (retryResponse.ok) {
-        console.log(`[Teams] Sucesso no fallback!`);
-        return res.json({ success: true, note: "Enviado via fallback simples" });
-      }
-
-      return res.status(response.status).json({ 
-        error: "Erro na resposta do Teams", 
-        status: response.status,
-        details: responseText 
-      });
-    }
-  } catch (error: any) {
-    console.error("[Teams] Erro na requisição proxy:", error);
-    res.status(500).json({ 
-      error: "Falha ao conectar com o Teams (Proxy Error)", 
-      message: error.message 
-    });
-  }
-});
-
-apiRouter.post("/delete-user", async (req, res) => {
+apiRouter.post("/delete-user", authenticate, requireAdmin, async (req, res) => {
   const { uid, email } = req.body;
   
   if (!uid && !email) {

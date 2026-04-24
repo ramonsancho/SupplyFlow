@@ -11,7 +11,6 @@ const userSchema = z.object({
   role: z.enum(['Administrador', 'Comprador', 'Aprovador'] as const),
   status: z.enum(['Ativo', 'Inativo'] as const),
   approvalLimit: z.number().min(0, 'O limite deve ser maior ou igual a 0').optional(),
-  teamsWebhookUrl: z.string().url('URL inválida').or(z.literal('')).optional(),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -32,7 +31,6 @@ export default function UserModal({ isOpen, onClose, onSubmit, initialData }: Us
       role: initialData?.role || 'Comprador',
       status: initialData?.status || 'Ativo',
       approvalLimit: initialData?.approvalLimit || 0,
-      teamsWebhookUrl: initialData?.teamsWebhookUrl || '',
     }
   });
 
@@ -44,7 +42,6 @@ export default function UserModal({ isOpen, onClose, onSubmit, initialData }: Us
         role: initialData?.role || 'Comprador',
         status: initialData?.status || 'Ativo',
         approvalLimit: initialData?.approvalLimit || 0,
-        teamsWebhookUrl: initialData?.teamsWebhookUrl || '',
       });
     }
   }, [initialData, isOpen, reset]);
@@ -124,17 +121,6 @@ export default function UserModal({ isOpen, onClose, onSubmit, initialData }: Us
               placeholder="Ex: 5000.00"
             />
             {errors.approvalLimit && <p className="text-xs text-red-500 font-medium">{errors.approvalLimit.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Teams Webhook URL</label>
-            <input 
-              {...register('teamsWebhookUrl')}
-              className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
-              placeholder="https://m365x...webhook.office.com/..."
-            />
-            <p className="text-[10px] text-[#8E9299]">URL do Webhook de Entrada do Microsoft Teams para notificações.</p>
-            {errors.teamsWebhookUrl && <p className="text-xs text-red-500 font-medium">{errors.teamsWebhookUrl.message}</p>}
           </div>
 
           <div className="pt-6 border-t border-[#E5E5E5] flex items-center justify-end gap-4">

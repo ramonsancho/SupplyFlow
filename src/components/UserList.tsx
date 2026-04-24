@@ -22,7 +22,6 @@ import { User } from '../types';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { emailService } from '../services/emailService';
-import { teamsService } from '../services/teamsService';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { 
@@ -38,7 +37,8 @@ import {
   getDoc,
   setDoc
 } from 'firebase/firestore';
-import { initializeApp, getAuth as getAuthSecondary, createUserWithEmailAndPassword, firebaseConfig } from '../firebase';
+import { initializeApp, getAuth as getAuthSecondary, createUserWithEmailAndPassword, firebaseConfig, getAuthToken } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { deleteApp, getApps } from 'firebase/app';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -68,10 +68,9 @@ export default function UserList() {
       unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
-          const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
           const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
           
-          if (bootstrapEmails.includes(userEmail)) {
+          if (isBootstrapAdmin(userEmail)) {
             let needsUpdate = false;
             const updates: any = {};
             
@@ -113,12 +112,19 @@ export default function UserList() {
       setUsers(userData);
       setIsLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      } catch (e) {
+        console.error('Failed to list users in UserList:', e);
+      }
     });
 
     const checkApiHealth = async () => {
       try {
-        const response = await fetch('/api/health');
+        const token = await getAuthToken();
+        const response = await fetch('/api/health', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (response.ok) {
           const data = await response.json();
           console.log('[API Health]', data);
@@ -211,9 +217,13 @@ export default function UserList() {
     try {
       // 1. Deletar do Firebase Authentication via API
       try {
+        const token = await getAuthToken();
         const response = await fetch('/api/delete-user', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({ uid: id, email: email })
         });
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, 
   Bar, 
@@ -16,7 +17,9 @@ import {
 import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight, FileText, Users, ShoppingBag, Target, Calendar } from 'lucide-react';
 import { db, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
-import { PurchaseOrder, RFQ, Supplier, Proposal } from '../types';
+import { PurchaseOrder, RFQ, Supplier, Proposal, User, Contract } from '../types';
+import { auth } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion } from 'motion/react';
@@ -28,30 +31,34 @@ function cn(...inputs: ClassValue[]) {
 const COLORS = ['#0052FF', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState(30);
 
-  const criticalAlerts = pos.filter(po => {
-    if (po.status === 'received' || po.status === 'closed' || po.status === 'draft' || po.status === 'cancelled') return false;
-    if (po.receivedAmount > 0) return false;
-    if (!po.deliveryDate) return false;
-    
-    const deliveryDate = new Date(po.deliveryDate);
-    const now = new Date();
-    const diffDays = Math.ceil((deliveryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
-    return diffDays <= 7; // Vencido ou vence em até 7 dias
-  }).sort((a, b) => {
-    const dateA = new Date(a.deliveryDate!).getTime();
-    const dateB = new Date(b.deliveryDate!).getTime();
-    return dateA - dateB;
-  });
-
   useEffect(() => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+        }
+      }, (error) => {
+        try {
+          handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
+        } catch (e) {
+          console.error('User profile fetch error in Dashboard:', e);
+        }
+      });
+    }
+
     const unsubscribePOs = onSnapshot(collection(db, 'purchase-orders'), (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const d = doc.data();
@@ -112,21 +119,34 @@ export default function Dashboard() {
     const unsubscribeSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Supplier[];
       setSuppliers(data);
-      setIsLoading(false);
     }, (error) => {
       try {
         handleFirestoreError(error, OperationType.LIST, 'suppliers');
       } catch (e) {
         console.error('Dashboard suppliers error:', e);
       }
+    });
+
+    const unsubscribeContracts = onSnapshot(collection(db, 'contracts'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Contract[];
+      setContracts(data);
+      setIsLoading(false);
+    }, (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'contracts');
+      } catch (e) {
+        console.error('Dashboard contracts error:', e);
+      }
       setIsLoading(false);
     });
 
     return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
       unsubscribePOs();
       unsubscribeRFQs();
       unsubscribeProposals();
       unsubscribeSuppliers();
+      unsubscribeContracts();
     };
   }, []);
 
@@ -309,15 +329,23 @@ export default function Dashboard() {
     );
   }
 
+  const criticalAlerts = pos.filter(po => {
+    if (po.status === 'received' || po.status === 'closed' || po.status === 'draft' || po.status === 'cancelled') return false;
+    if (po.receivedAmount > 0) return false;
+    if (!po.deliveryDate) return false;
+    
+    const deliveryDate = new Date(po.deliveryDate);
+    const now = new Date();
+    const diffDays = Math.ceil((deliveryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return diffDays <= 7;
+  }).sort((a, b) => {
+    const dateA = new Date(a.deliveryDate!).getTime();
+    const dateB = new Date(b.deliveryDate!).getTime();
+    return dateA - dateB;
+  });
+
   const kpis = [
-    { 
-      label: 'Total de Economia', 
-      value: `R$ ${totalSavings.toLocaleString()}`, 
-      icon: Target, 
-      color: 'brand',
-      trend: '+12.5%',
-      trendUp: true
-    },
     { 
       label: 'Gasto Total', 
       value: `R$ ${totalSpent.toLocaleString()}`, 
@@ -325,6 +353,14 @@ export default function Dashboard() {
       color: 'brand',
       trend: `${openPOsCount} Ativas`,
       trendUp: null
+    },
+    { 
+      label: 'Total Economizado', 
+      value: `R$ ${totalSavings.toLocaleString()}`, 
+      icon: Target, 
+      color: 'emerald',
+      trend: `${((totalSavings / (totalSpent + totalSavings)) * 100).toFixed(1)}% Saving`,
+      trendUp: true
     },
     { 
       label: 'Aprovação Média', 
@@ -335,12 +371,12 @@ export default function Dashboard() {
       trendUp: true
     },
     { 
-      label: 'Lead Time Médio', 
-      value: `${avgLeadTimeDays} dias`, 
+      label: 'Para Receber', 
+      value: pos.filter(p => (p.status === 'sent' || p.status === 'approved') && p.receivedAmount < p.totalAmount).length.toString(), 
       icon: Calendar, 
       color: 'amber',
-      trend: '-0.5d',
-      trendUp: true
+      trend: 'OCs Pendentes',
+      trendUp: null
     },
     { 
       label: 'Acuracidade', 
@@ -352,13 +388,70 @@ export default function Dashboard() {
     },
   ];
 
+  // Calculate Action Items (Inbox)
+  const isAdmin = currentUserProfile?.role === 'Administrador' || (auth.currentUser?.email && isBootstrapAdmin(auth.currentUser.email));
+  const isApprover = isAdmin || currentUserProfile?.role === 'Aprovador';
+
+  const inboxItems = [
+    ...(isApprover ? [{
+      id: 'pending_approvals',
+      title: 'Aprovações Pendentes',
+      description: 'Ordens que aguardam seu aval financeiro.',
+      count: pos.filter(p => p.status === 'pending_approval').length,
+      icon: CheckCircle2,
+      color: 'brand',
+      link: '/purchase-orders'
+    }] : []),
+    {
+      id: 'late_deliveries',
+      title: 'Entregas Atrasadas',
+      description: 'OCs com prazo expirado e sem recebimento total.',
+      count: pos.filter(po => {
+        if (po.status === 'received' || po.status === 'closed' || po.status === 'draft' || po.status === 'cancelled') return false;
+        if (!po.deliveryDate) return false;
+        return new Date(po.deliveryDate) < new Date() && po.receivedAmount < po.totalAmount;
+      }).length,
+      icon: AlertCircle,
+      color: 'rose',
+      link: '/purchase-orders'
+    },
+    {
+      id: 'pending_proposals',
+      title: 'RFQs sem Proposta',
+      description: 'Cotações enviadas que ainda não receberam ofertas.',
+      count: rfqs.filter(r => r.status === 'sent' && !proposals.some(p => p.rfqId === r.id)).length,
+      icon: FileText,
+      color: 'amber',
+      link: '/rfqs'
+    },
+    {
+      id: 'contracts_expiring',
+      title: 'Contratos a Vencer',
+      description: 'Contratos vigentes com prazo menor que 30 dias.',
+      count: contracts.filter(c => {
+        if (c.status !== 'active') return false;
+        const diff = new Date(c.endDate).getTime() - new Date().getTime();
+        return diff > 0 && diff < (1000 * 60 * 60 * 24 * 30);
+      }).length,
+      icon: TrendingDown,
+      color: 'violet',
+      link: '/contracts'
+    }
+  ].filter(item => item.count > 0);
+
   return (
     <div className="space-y-12">
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         <div>
-          <h2 className="text-4xl font-bold tracking-tight text-slate-900">Dashboard Executivo</h2>
-          <p className="text-slate-500 mt-2 text-lg font-medium">Análise estratégica de suprimentos e performance de rede.</p>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900">
+            {currentUserProfile ? `Olá, ${currentUserProfile.name.split(' ')[0]}` : 'Dashboard Executivo'}
+          </h2>
+          <p className="text-slate-500 mt-2 text-lg font-medium">
+            {currentUserProfile?.role === 'Administrador' ? 'Visão global estratégica de suprimentos.' : 
+             currentUserProfile?.role === 'Comprador' ? 'Suas atividades e performance de cotação.' :
+             'Suas aprovações e pendências críticas.'}
+          </p>
         </div>
         <div className="flex items-center gap-4 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm self-start">
           {[30, 90, 180, 365, 0].map((period) => (
@@ -378,53 +471,124 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {kpis.map((kpi, idx) => (
-          <motion.div
-            key={kpi.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-500 group"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className={cn(
-                "p-3 rounded-2xl transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3",
-                kpi.color === 'emerald' && "bg-emerald-50 text-emerald-600",
-                kpi.color === 'brand' && "bg-brand-50 text-brand-600",
-                kpi.color === 'sky' && "bg-sky-50 text-sky-600",
-                kpi.color === 'amber' && "bg-amber-50 text-amber-600",
-                kpi.color === 'violet' && "bg-violet-50 text-violet-600",
-              )}>
-                <kpi.icon size={24} />
-              </div>
-              {kpi.trend && (
-                <span className={cn(
-                  "text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider",
-                  kpi.trendUp === true && "text-emerald-600 bg-emerald-50",
-                  kpi.trendUp === false && "text-rose-600 bg-rose-50",
-                  kpi.trendUp === null && "text-slate-500 bg-slate-50"
+      {/* Row 1: Executive KPIs */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-slate-400">
+          <TrendingUp size={16} />
+          <span className="text-xs font-bold uppercase tracking-widest italic">KPIs Executivos</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {kpis.map((kpi, idx) => (
+            <motion.div
+              key={kpi.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-500 group"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className={cn(
+                  "p-3 rounded-2xl transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3",
+                  kpi.color === 'emerald' && "bg-emerald-50 text-emerald-600",
+                  kpi.color === 'brand' && "bg-brand-50 text-brand-600",
+                  kpi.color === 'sky' && "bg-sky-50 text-sky-600",
+                  kpi.color === 'amber' && "bg-amber-50 text-amber-600",
+                  kpi.color === 'violet' && "bg-violet-50 text-violet-600",
+                  kpi.color === 'rose' && "bg-rose-50 text-rose-600",
                 )}>
-                  {kpi.trend}
-                </span>
-              )}
-            </div>
-            <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">{kpi.label}</h3>
-            <p className="text-2xl font-bold text-slate-900 tracking-tight">{kpi.value}</p>
-          </motion.div>
-        ))}
+                  <kpi.icon size={24} />
+                </div>
+                {kpi.trend && (
+                  <span className={cn(
+                    "text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider",
+                    kpi.trendUp === true && "text-emerald-600 bg-emerald-50",
+                    kpi.trendUp === false && "text-rose-600 bg-rose-50",
+                    kpi.trendUp === null && "text-slate-500 bg-slate-50"
+                  )}>
+                    {kpi.trend}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">{kpi.label}</h3>
+              <p className="text-2xl font-bold text-slate-900 tracking-tight">{kpi.value}</p>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
-      {/* Main Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Monthly Performance Chart */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.5 }}
-          className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm"
-        >
+      {/* Row 2: Inbox / Actions */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-slate-400">
+            <CheckCircle2 size={16} />
+            <span className="text-xs font-bold uppercase tracking-widest italic">Minha Central de Ação</span>
+          </div>
+          {inboxItems.length > 0 && (
+            <span className="text-[10px] font-bold text-brand-500 bg-brand-50 px-2 py-1 rounded-full uppercase tracking-wider animate-pulse">
+              {inboxItems.length} Pendências Ativas
+            </span>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {inboxItems.map((item, idx) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 + (idx * 0.1) }}
+              className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-500 flex flex-col h-full relative overflow-hidden group"
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className={cn(
+                  "p-3 rounded-2xl group-hover:scale-110 transition-transform",
+                  item.color === 'brand' && "bg-brand-50 text-brand-600",
+                  item.color === 'rose' && "bg-rose-50 text-rose-600",
+                  item.color === 'amber' && "bg-amber-50 text-amber-600",
+                  item.color === 'violet' && "bg-violet-50 text-violet-600",
+                )}>
+                  <item.icon size={20} />
+                </div>
+                <div className="text-4xl font-black text-slate-200 absolute right-6 top-6 transition-colors group-hover:text-slate-100 italic">
+                  {item.count}
+                </div>
+              </div>
+              <h4 className="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{item.title}</h4>
+              <p className="text-sm text-slate-500 mt-1 flex-1">{item.description}</p>
+              <button 
+                onClick={() => navigate(item.link)}
+                className="mt-6 text-xs font-bold text-slate-400 group-hover:text-brand-600 transition-colors uppercase tracking-widest flex items-center gap-2 group-hover:gap-3 transition-all"
+              >
+                Gerenciar Agora <ArrowUpRight size={14} />
+              </button>
+            </motion.div>
+          ))}
+          {inboxItems.length === 0 && (
+            <div className="lg:col-span-4 bg-slate-50 border border-dashed border-slate-200 p-12 rounded-[2rem] text-center">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <CheckCircle2 className="text-emerald-500" size={32} />
+              </div>
+              <h4 className="text-lg font-bold text-slate-900 italic">Tudo em dia!</h4>
+              <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto italic">Você não possui pendências críticas que exigem ação imediata. Ótimo trabalho de gestão.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Row 3: Trends and Analysis */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-slate-400">
+          <TrendingUp size={16} />
+          <span className="text-xs font-bold uppercase tracking-widest italic">Tendências e Análise</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Monthly Performance Chart */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5 }}
+            className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm"
+          >
           <div className="flex items-center justify-between mb-10">
             <div>
               <h3 className="text-xl font-bold text-slate-900">Performance Mensal</h3>
@@ -539,10 +703,16 @@ export default function Dashboard() {
           </div>
         </motion.div>
       </div>
+    </div>
 
-      {/* Bottom Grid: Suppliers and Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Top Suppliers */}
+    {/* Row 4: Performance de Rede e Alertas */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-slate-400">
+          <Users size={16} />
+          <span className="text-xs font-bold uppercase tracking-widest italic">Performance de Rede e Alertas</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Top Suppliers */}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -644,11 +814,17 @@ export default function Dashboard() {
             )}
           </div>
           <div className="p-6 bg-slate-50/50 border-t border-slate-100 text-center">
-            <button className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-[0.2em]">Ver Todas as Ordens</button>
+            <button 
+              onClick={() => navigate('/purchase-orders')}
+              className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-[0.2em]"
+            >
+              Ver Todas as Ordens
+            </button>
           </div>
         </motion.div>
       </div>
     </div>
-  );
+  </div>
+);
 }
 

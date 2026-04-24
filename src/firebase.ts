@@ -75,6 +75,11 @@ export function formatDate(dateStr: string | undefined | null): string {
   }
 }
 
+export async function getAuthToken(): Promise<string | null> {
+  if (!auth.currentUser) return null;
+  return await auth.currentUser.getIdToken();
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),

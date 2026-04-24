@@ -5,9 +5,6 @@ import { db, auth, handleFirestoreError, OperationType, formatDate } from '../fi
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy, getDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
-import { emailService } from '../services/emailService';
-import { teamsService } from '../services/teamsService';
-import { notificationService } from '../services/notificationService';
 import { poService } from '../services/poService';
 import ProposalModal from './ProposalModal';
 import { clsx, type ClassValue } from 'clsx';
@@ -169,81 +166,9 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
       await addLog('Gerou PO de Proposta', 'PurchaseOrder', poRef.id, auth.currentUser?.email || 'Unknown');
       await addNotification('PO Gerada', `A Ordem de Compra #${poNumber} foi gerada a partir da proposta de ${proposal.supplierName}.`, 'success');
 
-      // 5. Notificar aprovadores por email
-      try {
-        console.log(`[Approval] Verificando aprovadores para OC #${poNumber} (via RFQ) no valor de R$ ${proposal.totalValue}`);
-        
-        const usersRef = collection(db, 'users');
-        // Fetch all active users and filter in memory to be more robust
-        const qApprovers = query(usersRef, where('status', '==', 'Ativo'));
-        
-        const approversSnapshot = await getDocs(qApprovers);
-        const allActiveUsers = approversSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-        
-        const potentialApprovers = allActiveUsers.filter(u => {
-          const isApprover = u.role === 'Aprovador' || u.role === 'Administrador';
-          // Administradores podem aprovar qualquer valor, Aprovadores dependem do limite
-          const hasLimit = u.role === 'Administrador' || Number(u.approvalLimit || 0) >= totalAmount;
-          return isApprover && hasLimit;
-        });
-
-        console.log(`[Approval] Detalhes dos usuários ativos:`, allActiveUsers.map(u => ({ name: u.name, role: u.role, limit: u.approvalLimit, email: u.email })));
-        console.log(`[Approval] Usuários ativos: ${allActiveUsers.length}, Aprovadores com limite: ${potentialApprovers.length}`);
-
-        if (potentialApprovers.length > 0) {
-          const approverNames = potentialApprovers.map(u => u.name).join(', ');
-          await addNotification('Aprovadores Encontrados', `Elegíveis: ${approverNames}`, 'info');
-          
-          let emailCount = 0;
-          let teamsCount = 0;
-
-          const poForNotification: PurchaseOrder = {
-            id: poRef.id,
-            number: poNumber,
-            supplierName: proposal.supplierName,
-            supplierId: proposal.supplierId,
-            totalAmount,
-            status: 'pending_approval',
-            createdBy: auth.currentUser?.uid || '',
-            items: proposal.items.map(item => ({
-              id: item.id,
-              description: item.description,
-              quantity: item.quantity,
-              unit: 'un', // Default unit if not present in proposal
-              unitPrice: item.unitPrice,
-              tax: 0
-            })),
-            receivedAmount: 0,
-            createdAt: new Date().toISOString()
-          };
-
-          for (const approver of potentialApprovers) {
-            const { emailSuccess, teamsSuccess } = await notificationService.sendPOApprovalNotification(
-              poForNotification, 
-              approver, 
-              currentUserProfile?.name || 'Sistema'
-            );
-            if (emailSuccess) emailCount++;
-            if (teamsSuccess) teamsCount++;
-          }
-
-          if (emailCount > 0) {
-            await addNotification('Emails Enviados', `${emailCount} e-mail(s) de aprovação enviado(s).`, 'success');
-          }
-          if (teamsCount > 0) {
-            await addNotification('Teams Notificado', `${teamsCount} alerta(s) enviado(s) via Teams.`, 'success');
-          }
-        } else {
-          const reason = allActiveUsers.length === 0 
-            ? 'Nenhum usuário ativo encontrado no sistema.'
-            : `Encontrados ${allActiveUsers.length} usuários ativos, mas nenhum com perfil de Aprovador/Admin e limite >= R$ ${proposal.totalValue.toLocaleString()}.`;
-          
-          console.warn(`[Approval] ${reason}`);
-          await addNotification('Atenção', reason, 'warning');
-        }
-      } catch (emailError) {
-        console.error('[Approval] Erro ao processar notificação de email:', emailError);
-        await addNotification('Erro de Notificação', 'A OC foi gerada, mas houve um erro ao processar os e-mails de aprovação.', 'error');
+      // Disparo de e-mail removido por desejo do usuário
+      if (poPayload.status === 'pending_approval') {
+        console.log(`[Approval] OC #${poNumber} aguardando aprovação.`);
       }
 
       onClose();

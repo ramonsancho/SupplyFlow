@@ -109,13 +109,18 @@ service cloud.firestore {
       return isAuthenticated() && isActive();
     }
 
+    function isBootstrapAdmin() {
+      return request.auth.token.email != null && 
+             (request.auth.token.email.lower() == "ramon.souza@oeg.group" || 
+              request.auth.token.email.lower() == "ramonsancho@gmail.com");
+    }
+
     function isAdmin() {
       return isAuthenticated() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador' &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo') ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == "ramon.souza@oeg.group") ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == "ramonsancho@gmail.com")
+        isBootstrapAdmin()
       );
     }
 

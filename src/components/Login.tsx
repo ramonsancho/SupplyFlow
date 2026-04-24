@@ -16,6 +16,7 @@ import {
   auth, 
   db 
 } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
@@ -58,8 +59,7 @@ export default function Login() {
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
-        if (bootstrapEmails.includes(user.email?.toLowerCase().trim() || '') && userData.role !== 'Administrador') {
+        if (isBootstrapAdmin(user.email) && userData.role !== 'Administrador') {
           await setDoc(userRef, { ...userData, role: 'Administrador' }, { merge: true }).catch(e => console.error('Error updating bootstrap admin:', e));
         }
 
@@ -133,8 +133,7 @@ export default function Login() {
       const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
       const querySnapshot = await getDocs(q);
 
-      const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
-      const isBootstrap = bootstrapEmails.includes(email.toLowerCase().trim());
+      const isBootstrap = isBootstrapAdmin(email);
 
       if (querySnapshot.empty && !isBootstrap) {
         await user.delete();

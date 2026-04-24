@@ -22,6 +22,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { User as UserType } from '../types';
@@ -47,10 +48,9 @@ export default function Layout() {
         const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
             const userEmail = user.email?.toLowerCase().trim() || '';
             
-            if (bootstrapEmails.includes(userEmail)) {
+            if (isBootstrapAdmin(userEmail)) {
               let needsUpdate = false;
               const updates: any = {};
               
@@ -193,7 +193,7 @@ export default function Layout() {
               Sair do Sistema
             </button>
           </div>
-          <p className="text-[10px] text-center text-slate-400 mt-4 font-bold tracking-widest uppercase">Version 1.3</p>
+          <p className="text-[10px] text-center text-slate-400 mt-4 font-bold tracking-widest uppercase">Version 2.0</p>
         </div>
       </aside>
 

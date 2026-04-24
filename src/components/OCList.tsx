@@ -29,14 +29,12 @@ import ReceiptHistoryModal from './ReceiptHistoryModal';
 import EditAmountModal from './EditAmountModal';
 import { PurchaseOrder, Supplier, User, Receipt } from '../types';
 import { poService } from '../services/poService';
-import { emailService } from '../services/emailService';
-import { teamsService } from '../services/teamsService';
-import { notificationService } from '../services/notificationService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -87,11 +85,10 @@ export default function OCList() {
       const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
-          const bootstrapEmails = ["ramon.souza@oeg.group", "ramonsancho@gmail.com"];
           const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
           
           // Self-healing for bootstrap admins
-          if (bootstrapEmails.includes(userEmail)) {
+          if (isBootstrapAdmin(userEmail)) {
             let needsUpdate = false;
             const updates: any = {};
             
@@ -115,7 +112,11 @@ export default function OCList() {
           setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
+        try {
+          handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
+        } catch (e) {
+          console.error('Failed to fetch user profile in OCList:', e);
+        }
       });
 
       const qUsers = query(collection(db, 'users'));
@@ -123,7 +124,11 @@ export default function OCList() {
         const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
         setAllUsers(users);
       }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'users');
+        try {
+          handleFirestoreError(error, OperationType.LIST, 'users');
+        } catch (e) {
+          console.error('Failed to list users in OCList:', e);
+        }
       });
 
       return () => {
@@ -180,19 +185,8 @@ export default function OCList() {
   }, []);
 
   const sendApprovalEmail = async (po: PurchaseOrder, approver: User) => {
-    const { emailSuccess, teamsSuccess } = await notificationService.sendPOApprovalNotification(po, approver, currentUserProfile?.name || 'Sistema');
-    
-    if (emailSuccess) {
-      await addNotification('Email Enviado', `Notificação por e-mail enviada para ${approver.name}`, 'info');
-    }
-    
-    if (teamsSuccess) {
-      await addNotification('Teams Notificado', `Mensagem enviada para ${approver.name} no Teams`, 'success');
-    }
-
-    if (!emailSuccess && !teamsSuccess) {
-      await addNotification('Erro na Notificação', `Não foi possível notificar ${approver.name}.`, 'warning');
-    }
+    // Email notifications removed by user request
+    console.log(`[Ação] Solicitação de aprovação enviada para ${approver.name} (Apenas Interface)`);
   };
 
   const handleAddPO = async (data: any) => {
@@ -226,75 +220,8 @@ export default function OCList() {
       await addNotification('OC Gerada', `A ordem de compra #${poNumber} foi emitida para ${supplier?.name}.`, 'success');
 
       if (poPayload.status === 'pending_approval') {
-        // Encontrar aprovadores que podem aprovar este valor diretamente do Firestore para garantir dados atualizados
-        console.log(`[Approval] Verificando aprovadores para OC #${poNumber} no valor de R$ ${totalAmount}`);
-        
-        try {
-          const usersRef = collection(db, 'users');
-          // Fetch all active users and filter in memory to be more robust against index issues or case sensitivity
-          const qApprovers = query(usersRef, where('status', '==', 'Ativo'));
-          
-          const approversSnapshot = await getDocs(qApprovers);
-          const allActiveUsers = approversSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-          
-          const potentialApprovers = allActiveUsers.filter(u => {
-            const isApprover = u.role === 'Aprovador' || u.role === 'Administrador';
-            // Administradores podem aprovar qualquer valor, Aprovadores dependem do limite
-            const hasLimit = u.role === 'Administrador' || Number(u.approvalLimit || 0) >= totalAmount;
-            return isApprover && hasLimit;
-          });
-
-          console.log(`[Approval] Detalhes dos usuários ativos:`, allActiveUsers.map(u => ({ name: u.name, role: u.role, limit: u.approvalLimit, email: u.email })));
-          console.log(`[Approval] Usuários ativos: ${allActiveUsers.length}, Aprovadores com limite: ${potentialApprovers.length}`);
-
-          if (potentialApprovers.length > 0) {
-            const approverNames = potentialApprovers.map(u => u.name).join(', ');
-            await addNotification('Aprovadores Encontrados', `Elegíveis: ${approverNames}`, 'info');
-            
-            let emailCount = 0;
-            let teamsCount = 0;
-
-            const poForNotification: PurchaseOrder = {
-              id: docRef.id,
-              number: poNumber,
-              supplierName: supplier?.name || 'Fornecedor',
-              supplierId: data.supplierId,
-              totalAmount,
-              status: 'pending_approval',
-              createdBy: auth.currentUser?.uid || '',
-              items: data.items,
-              receivedAmount: 0,
-              createdAt: new Date().toISOString()
-            };
-
-            for (const approver of potentialApprovers) {
-              const { emailSuccess, teamsSuccess } = await notificationService.sendPOApprovalNotification(
-                poForNotification, 
-                approver, 
-                currentUserProfile?.name || 'Sistema'
-              );
-              if (emailSuccess) emailCount++;
-              if (teamsSuccess) teamsCount++;
-            }
-
-            if (emailCount > 0) {
-              await addNotification('Emails Enviados', `${emailCount} e-mail(s) de aprovação enviado(s).`, 'success');
-            }
-            if (teamsCount > 0) {
-              await addNotification('Teams Notificado', `${teamsCount} alerta(s) enviado(s) via Teams.`, 'success');
-            }
-          } else {
-            const reason = allActiveUsers.length === 0 
-              ? 'Nenhum usuário ativo encontrado no sistema.'
-              : `Encontrados ${allActiveUsers.length} usuários ativos, mas nenhum com perfil de Aprovador/Admin e limite >= R$ ${totalAmount.toLocaleString()}.`;
-            
-            console.warn(`[Approval] ${reason}`);
-            await addNotification('Atenção', reason, 'warning');
-          }
-        } catch (approverError) {
-          console.error('[Approval] Erro ao buscar aprovadores ou enviar e-mails:', approverError);
-          await addNotification('Erro de Notificação', 'A OC foi criada, mas houve um erro ao processar os e-mails de aprovação.', 'error');
-        }
+        // Log para auditoria mas sem disparar e-mails por desejo do usuário
+        console.log(`[Approval] OC #${poNumber} aguardando aprovação.`);
       }
     } catch (error) {
       try {

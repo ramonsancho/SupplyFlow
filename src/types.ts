@@ -115,7 +115,6 @@ export type User = {
   role: 'Administrador' | 'Comprador' | 'Aprovador';
   status: 'Ativo' | 'Inativo';
   approvalLimit?: number;
-  teamsWebhookUrl?: string;
   createdAt: string;
 };
 
