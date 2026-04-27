@@ -855,7 +855,7 @@ export default function OCList() {
                     <span>Cancelar</span>
                   </button>
                 )}
-                {currentUserProfile?.role === 'Administrador' && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
+                {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador') && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -863,7 +863,7 @@ export default function OCList() {
                       setIsEditAmountModalOpen(true);
                     }}
                     className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-all shadow-md"
-                    title="Editar Valor (Admin)"
+                    title="Editar Valor"
                   >
                     <Edit2 size={16} />
                     <span>Editar Valor</span>
