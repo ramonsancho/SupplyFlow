@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { X, Save, DollarSign, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { PurchaseOrder, POItem } from '../types';
+import { formatCurrency } from '../firebase';
 
 const editAmountSchema = z.object({
   items: z.array(z.object({
@@ -151,7 +152,7 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
                   <div className="col-span-3 space-y-1">
                     <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest ml-1">Subtotal</label>
                     <div className="px-3 py-2 bg-white/50 rounded-lg text-sm font-bold text-[#141414]">
-                      R$ {((Number(watchedItems?.[index]?.quantity) || 0) * (Number(watchedItems?.[index]?.unitPrice) || 0)).toLocaleString()}
+                      R$ {formatCurrency((Number(watchedItems?.[index]?.quantity) || 0) * (Number(watchedItems?.[index]?.unitPrice) || 0))}
                     </div>
                   </div>
                   <div className="col-span-1 flex justify-center pb-2">
@@ -173,12 +174,12 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Novo Total da Ordem</p>
               <div className="flex items-center gap-2">
                 <DollarSign size={24} className="text-white/60" />
-                <span className="text-3xl font-bold">R$ {calculatedTotal.toLocaleString()}</span>
+                <span className="text-3xl font-bold">R$ {formatCurrency(calculatedTotal)}</span>
               </div>
             </div>
             <div className="text-right">
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Valor Anterior</p>
-              <p className="text-xl font-bold text-white/40 line-through">R$ {po.totalAmount.toLocaleString()}</p>
+              <p className="text-xl font-bold text-white/40 line-through">R$ {formatCurrency(po.totalAmount)}</p>
             </div>
           </div>
 

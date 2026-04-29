@@ -75,6 +75,14 @@ export function formatDate(dateStr: string | undefined | null): string {
   }
 }
 
+export function formatCurrency(value: number | undefined | null): string {
+  const val = value || 0;
+  return val.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export async function getAuthToken(): Promise<string | null> {
   if (!auth.currentUser) return null;
   return await auth.currentUser.getIdToken();

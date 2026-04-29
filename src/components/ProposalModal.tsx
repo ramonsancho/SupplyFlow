@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { X, Save, Plus, Trash2, User, AlertCircle } from 'lucide-react';
 import { RFQ, Supplier, ProposalItem } from '../types';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, formatCurrency } from '../firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 const proposalSchema = z.object({
@@ -197,7 +197,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
                   <div className="w-32 flex flex-col justify-end items-end">
                     <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Subtotal</p>
                     <p className="text-sm font-bold text-[#141414]">
-                      R$ {(field.quantity * (watch(`items.${index}.unitPrice`) || 0)).toLocaleString()}
+                      R$ {formatCurrency(field.quantity * (watch(`items.${index}.unitPrice`) || 0))}
                     </p>
                   </div>
                 </div>
@@ -208,7 +208,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
           <div className="flex justify-between items-center p-6 bg-[#141414] rounded-2xl text-white">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest opacity-60">Valor Total da Proposta</p>
-              <p className="text-2xl font-bold">R$ {totalValue.toLocaleString()}</p>
+              <p className="text-2xl font-bold">R$ {formatCurrency(totalValue)}</p>
             </div>
             <div className="flex gap-4">
               <button 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Calendar, FileText, User, DollarSign, Package } from 'lucide-react';
 import { PurchaseOrder } from '../types';
+import { formatCurrency } from '../firebase';
 
 interface ReceiptHistoryModalProps {
   isOpen: boolean;
@@ -69,7 +70,7 @@ export default function ReceiptHistoryModal({ isOpen, onClose, po }: ReceiptHist
                       <div className="flex items-center justify-end gap-1 text-green-600">
                         <DollarSign size={18} />
                         <span className="text-xl font-bold">
-                          {receipt.amount.toLocaleString()}
+                          {formatCurrency(receipt.amount)}
                         </span>
                       </div>
                     </div>
@@ -82,11 +83,11 @@ export default function ReceiptHistoryModal({ isOpen, onClose, po }: ReceiptHist
           <div className="mt-8 p-6 bg-[#141414] rounded-2xl text-white flex items-center justify-between">
             <div>
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Total Recebido</p>
-              <p className="text-2xl font-bold">R$ {po.receivedAmount.toLocaleString()}</p>
+              <p className="text-2xl font-bold">R$ {formatCurrency(po.receivedAmount)}</p>
             </div>
             <div className="text-right">
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Saldo Pendente</p>
-              <p className="text-xl font-bold text-white/80">R$ {(po.totalAmount - po.receivedAmount).toLocaleString()}</p>
+              <p className="text-xl font-bold text-white/80">R$ {formatCurrency(po.totalAmount - po.receivedAmount)}</p>
             </div>
           </div>
         </div>

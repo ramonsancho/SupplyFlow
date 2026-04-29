@@ -5,6 +5,8 @@ import * as z from 'zod';
 import { X, Save, Package, DollarSign, AlertCircle, FileText } from 'lucide-react';
 import { PurchaseOrder } from '../types';
 
+import { formatCurrency } from '../firebase';
+
 const receiveSchema = z.object({
   amount: z.number().min(0.01, 'O valor deve ser maior que zero'),
   invoiceNumber: z.string().min(1, 'Número da nota fiscal é obrigatório'),
@@ -45,7 +47,7 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
 
   const onFormSubmit = (data: ReceiveFormData) => {
     if (data.amount > remaining + 0.01) { // Small tolerance for float issues
-      setValidationError(`O valor recebido (R$ ${data.amount.toLocaleString()}) não pode ser maior que o saldo pendente (R$ ${remaining.toLocaleString()}).`);
+      setValidationError(`O valor recebido (R$ ${formatCurrency(data.amount)}) não pode ser maior que o saldo pendente (R$ ${formatCurrency(remaining)}).`);
       return;
     }
     setValidationError(null);
@@ -76,15 +78,15 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
           <div className="bg-[#F5F5F5] p-4 rounded-2xl space-y-2">
             <div className="flex justify-between text-xs font-bold text-[#8E9299] uppercase tracking-widest">
               <span>Total da OC</span>
-              <span>R$ {po.totalAmount.toLocaleString()}</span>
+              <span>R$ {formatCurrency(po.totalAmount)}</span>
             </div>
             <div className="flex justify-between text-xs font-bold text-green-600 uppercase tracking-widest">
               <span>Já Recebido</span>
-              <span>R$ {po.receivedAmount.toLocaleString()}</span>
+              <span>R$ {formatCurrency(po.receivedAmount)}</span>
             </div>
             <div className="pt-2 border-t border-[#E5E5E5] flex justify-between text-sm font-bold text-[#141414] uppercase tracking-widest">
               <span>Saldo Pendente</span>
-              <span>R$ {remaining.toLocaleString()}</span>
+              <span>R$ {formatCurrency(remaining)}</span>
             </div>
           </div>
 

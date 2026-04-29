@@ -33,7 +33,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
-import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate, formatCurrency } from '../firebase';
 import { isBootstrapAdmin } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
@@ -241,7 +241,7 @@ export default function OCList() {
     }
 
     if ((currentUserProfile.approvalLimit || 0) < po.totalAmount && currentUserProfile.role !== 'Administrador') {
-      await addNotification('Limite Insuficiente', `Seu limite de aprovação (R$ ${currentUserProfile.approvalLimit?.toLocaleString()}) é inferior ao total da OC.`, 'error');
+      await addNotification('Limite Insuficiente', `Seu limite de aprovação (R$ ${formatCurrency(currentUserProfile.approvalLimit)}) é inferior ao total da OC.`, 'error');
       return;
     }
 
@@ -295,7 +295,7 @@ export default function OCList() {
       });
 
       await addLog('Registrou Recebimento', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
-      await addNotification('Recebimento Registrado', `Recebimento de R$ ${amount.toLocaleString()} (NF: ${invoiceNumber}) registrado para OC #${selectedPO.number}.`, 'info');
+      await addNotification('Recebimento Registrado', `Recebimento de R$ ${formatCurrency(amount)} (NF: ${invoiceNumber}) registrado para OC #${selectedPO.number}.`, 'info');
       setIsReceiveModalOpen(false);
       setSelectedPO(null);
     } catch (error) {
@@ -378,8 +378,8 @@ export default function OCList() {
 
       // 3. Update the supplier document
       await updateDoc(doc(db, 'suppliers', selectedPO.supplierId), {
-        rating: Number(averageRating.toFixed(1)),
-        accuracy: Number(accuracy.toFixed(1)),
+        rating: Number(averageRating.toFixed(2)),
+        accuracy: Number(accuracy.toFixed(2)),
         updatedAt: serverTimestamp()
       });
 
@@ -511,8 +511,8 @@ export default function OCList() {
     const tableData = po.items.map(item => [
       item.description,
       item.quantity.toString(),
-      `R$ ${item.unitPrice.toLocaleString()}`,
-      `R$ ${(item.quantity * item.unitPrice).toLocaleString()}`
+      `R$ ${formatCurrency(item.unitPrice)}`,
+      `R$ ${formatCurrency(item.quantity * item.unitPrice)}`
     ]);
 
     autoTable(doc, {
@@ -527,7 +527,7 @@ export default function OCList() {
 
     // Total
     doc.setFont('helvetica', 'bold');
-    doc.text(`TOTAL DA ORDEM: R$ ${po.totalAmount.toLocaleString()}`, 140, finalY + 15);
+    doc.text(`TOTAL DA ORDEM: R$ ${formatCurrency(po.totalAmount)}`, 140, finalY + 15);
 
     // Created and Approved Info
     doc.setFontSize(9);
@@ -785,11 +785,11 @@ export default function OCList() {
               <div className="flex-1 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest mb-1">Total</p>
-                  <p className="text-lg font-bold text-[#141414]">R$ {oc.totalAmount.toLocaleString()}</p>
+                  <p className="text-lg font-bold text-[#141414]">R$ {formatCurrency(oc.totalAmount)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest mb-1">Recebido</p>
-                  <p className="text-lg font-bold text-green-600">R$ {oc.receivedAmount.toLocaleString()}</p>
+                  <p className="text-lg font-bold text-green-600">R$ {formatCurrency(oc.receivedAmount)}</p>
                 </div>
               </div>
 
@@ -802,7 +802,7 @@ export default function OCList() {
                   ></div>
                 </div>
                 <p className="text-xs font-bold text-[#141414] mt-2">
-                  R$ {(oc.totalAmount - oc.receivedAmount).toLocaleString()} pendente
+                  R$ {formatCurrency(oc.totalAmount - oc.receivedAmount)} pendente
                 </p>
               </div>
 

@@ -15,7 +15,7 @@ import {
   Area
 } from 'recharts';
 import { TrendingUp, TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight, FileText, Users, ShoppingBag, Target, Calendar } from 'lucide-react';
-import { db, handleFirestoreError, OperationType, formatDate } from '../firebase';
+import { db, handleFirestoreError, OperationType, formatDate, formatCurrency } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { PurchaseOrder, RFQ, Supplier, Proposal, User, Contract } from '../types';
 import { auth } from '../firebase';
@@ -201,7 +201,7 @@ export default function Dashboard() {
     return acc + (end - start);
   }, 0);
   const avgApprovalTimeHours = approvedPOs.length > 0 
-    ? (totalApprovalTime / approvedPOs.length / (1000 * 60 * 60)).toFixed(1) 
+    ? (totalApprovalTime / approvedPOs.length / (1000 * 60 * 60)).toFixed(2) 
     : '0';
 
   const receivedPOs = filteredPOs.filter(po => po.receivedAt && po.createdAt);
@@ -212,12 +212,12 @@ export default function Dashboard() {
     return acc + (end - start);
   }, 0);
   const avgLeadTimeDays = receivedPOs.length > 0 
-    ? (totalLeadTime / receivedPOs.length / (1000 * 60 * 60 * 24)).toFixed(1) 
+    ? (totalLeadTime / receivedPOs.length / (1000 * 60 * 60 * 24)).toFixed(2) 
     : '0';
 
   const suppliersWithAccuracy = suppliers.filter(s => s.accuracy !== undefined);
   const overallAccuracy = suppliersWithAccuracy.length > 0
-    ? (suppliersWithAccuracy.reduce((acc, s) => acc + (s.accuracy || 0), 0) / suppliersWithAccuracy.length).toFixed(1)
+    ? (suppliersWithAccuracy.reduce((acc, s) => acc + (s.accuracy || 0), 0) / suppliersWithAccuracy.length).toFixed(2)
     : '0';
 
   const getAccuracyLabel = (acc: string) => {
@@ -348,7 +348,7 @@ export default function Dashboard() {
   const kpis = [
     { 
       label: 'Gasto Total', 
-      value: `R$ ${totalSpent.toLocaleString()}`, 
+      value: `R$ ${formatCurrency(totalSpent)}`, 
       icon: ShoppingBag, 
       color: 'brand',
       trend: `${openPOsCount} Ativas`,
@@ -356,10 +356,10 @@ export default function Dashboard() {
     },
     { 
       label: 'Total Economizado', 
-      value: `R$ ${totalSavings.toLocaleString()}`, 
+      value: `R$ ${formatCurrency(totalSavings)}`, 
       icon: Target, 
       color: 'emerald',
-      trend: `${((totalSavings / (totalSpent + totalSavings)) * 100).toFixed(1)}% Saving`,
+      trend: `${((totalSavings / (totalSpent + totalSavings)) * 100).toFixed(2)}% Saving`,
       trendUp: true
     },
     { 
@@ -684,7 +684,7 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => `R$ ${value.toLocaleString()}`}
+                  formatter={(value: number) => `R$ ${formatCurrency(value)}`}
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                 />
               </PieChart>
@@ -697,7 +697,7 @@ export default function Dashboard() {
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                   <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 transition-colors">{item.name}</span>
                 </div>
-                <span className="text-xs font-mono font-bold text-slate-400">R$ {item.value.toLocaleString()}</span>
+                <span className="text-xs font-mono font-bold text-slate-400">R$ {formatCurrency(item.value)}</span>
               </div>
             ))}
           </div>
@@ -739,7 +739,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-mono font-bold text-slate-900">R$ {s.total.toLocaleString()}</p>
+                  <p className="text-sm font-mono font-bold text-slate-900">R$ {formatCurrency(s.total)}</p>
                   <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
                     <div 
                       className="h-full bg-brand-500 rounded-full" 
@@ -801,7 +801,7 @@ export default function Dashboard() {
                         {isOverdue ? 'Vencido em' : 'Vence em'} {formatDate(po.deliveryDate)}
                       </p>
                       <span className="w-1 h-1 rounded-full bg-slate-300" />
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">R$ {po.totalAmount.toLocaleString()}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">R$ {formatCurrency(po.totalAmount)}</p>
                     </div>
                   </div>
                 </div>

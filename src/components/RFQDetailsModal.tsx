@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, FileText, Calendar, Tag, CheckCircle2, Clock, AlertCircle, ShoppingCart } from 'lucide-react';
 import { RFQ, Proposal, User, PurchaseOrder } from '../types';
-import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate, formatCurrency } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy, getDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
@@ -263,7 +263,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-[#141414]">R$ {(proposal.totalValue || 0).toLocaleString()}</p>
+                          <p className="text-lg font-bold text-[#141414]">R$ {formatCurrency(proposal.totalValue)}</p>
                           <p className="text-[10px] text-[#8E9299] font-bold uppercase tracking-widest">
                             Entrega: {formatDate(proposal.deliveryDate)}
                           </p>

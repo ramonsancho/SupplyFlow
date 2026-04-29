@@ -262,7 +262,7 @@ service cloud.firestore {
       allow read: if canAccess();
       allow create: if canAccess() && isValidRFQ(request.resource.data);
       allow update: if canAccess() && isValidRFQ(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if canAccess();
     }
 
     match /purchase-orders/{poId} {
