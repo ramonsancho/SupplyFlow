@@ -494,6 +494,10 @@ export default function OCList() {
       : formatDate(po.createdAt);
       
     doc.text(`Data de Emissão: ${displayDate}`, 150, 65);
+    
+    if (po.deliveryDate) {
+      doc.text(`Prazo de Entrega: ${formatDate(po.deliveryDate)}`, 150, 71);
+    }
 
     // Supplier Info
     doc.setFont('helvetica', 'bold');
