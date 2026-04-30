@@ -15,7 +15,8 @@ import {
   Tag,
   ArrowUpRight,
   Download,
-  Send
+  Send,
+  Edit3
 } from 'lucide-react';
 import RFQModal from './RFQModal';
 import ConfirmModal from './ConfirmModal';
@@ -38,6 +39,7 @@ function cn(...inputs: ClassValue[]) {
 
 export default function RFQList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [rfqToEdit, setRfqToEdit] = useState<RFQ | null>(null);
   const [selectedRFQ, setSelectedRFQ] = useState<RFQ | null>(null);
   const [rfqToDelete, setRfqToDelete] = useState<{id: string, number: number} | null>(null);
   const [rfqToSendEmail, setRfqToSendEmail] = useState<{id: string, number: number, family: string} | null>(null);
@@ -70,26 +72,38 @@ export default function RFQList() {
     return () => unsubscribe();
   }, []);
 
-  const handleAddRFQ = async (data: any) => {
+  const handleSaveRFQ = async (data: any) => {
     try {
-      const rfqPayload = JSON.parse(JSON.stringify({
-        ...data,
-        number: rfqs.length + 1001,
-        status: 'draft',
-      }));
+      if (rfqToEdit) {
+        // Update existing RFQ
+        await updateDoc(doc(db, 'rfqs', rfqToEdit.id), {
+          ...data,
+          updatedAt: serverTimestamp(),
+        });
+        await addLog('Editou RFQ', 'RFQ', rfqToEdit.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('RFQ Atualizada', `A cotação #${rfqToEdit.number} foi atualizada com sucesso.`, 'success');
+        setRfqToEdit(null);
+      } else {
+        // Create new RFQ
+        const rfqPayload = JSON.parse(JSON.stringify({
+          ...data,
+          number: rfqs.length + 1001,
+          status: 'draft',
+        }));
 
-      const docRef = await addDoc(collection(db, 'rfqs'), {
-        ...rfqPayload,
-        createdAt: serverTimestamp(),
-      });
+        const docRef = await addDoc(collection(db, 'rfqs'), {
+          ...rfqPayload,
+          createdAt: serverTimestamp(),
+        });
+        await addLog('Criou RFQ', 'RFQ', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('RFQ Criada', `A cotação #${rfqs.length + 1001} foi gerada com sucesso.`, 'success');
+      }
       setIsModalOpen(false);
-      await addLog('Criou RFQ', 'RFQ', docRef.id, auth.currentUser?.email || 'Unknown');
-      await addNotification('RFQ Criada', `A cotação #${rfqs.length + 1001} foi gerada com sucesso.`, 'success');
     } catch (error) {
       try {
-        handleFirestoreError(error, OperationType.CREATE, 'rfqs');
+        handleFirestoreError(error, rfqToEdit ? OperationType.UPDATE : OperationType.CREATE, rfqToEdit ? `rfqs/${rfqToEdit.id}` : 'rfqs');
       } catch (e) {
-        console.error('RFQ add error:', e);
+        console.error('RFQ save error:', e);
       }
     }
   };
@@ -306,10 +320,14 @@ export default function RFQList() {
       </div>
 
       <RFQModal 
-        key={isModalOpen ? 'open' : 'closed'}
+        key={isModalOpen ? (rfqToEdit ? `edit-${rfqToEdit.id}` : 'new') : 'closed'}
         isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSubmit={(data) => handleAddRFQ(data).catch(err => console.error('Error in handleAddRFQ:', err))}
+        onClose={() => {
+          setIsModalOpen(false);
+          setRfqToEdit(null);
+        }} 
+        onSubmit={handleSaveRFQ}
+        initialData={rfqToEdit || undefined}
       />
 
       <ConfirmModal
@@ -487,6 +505,19 @@ export default function RFQList() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center justify-end gap-2">
+                        <motion.button 
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRfqToEdit(rfq);
+                            setIsModalOpen(true);
+                          }}
+                          className="p-3 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-2xl transition-all duration-300"
+                          title="Editar RFQ"
+                        >
+                          <Edit3 size={18} />
+                        </motion.button>
                         <motion.button 
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
