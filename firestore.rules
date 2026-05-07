@@ -124,6 +124,13 @@ service cloud.firestore {
       );
     }
 
+    function isRequisitante() {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Requisitante'
+      );
+    }
+
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
@@ -234,7 +241,7 @@ service cloud.firestore {
       return hasRequiredFields(['name', 'email', 'role', 'status', 'createdAt']) &&
              isValidString(data.name, 1, 100) &&
              isValidEmail(data.email) &&
-             data.role in ['Administrador', 'Comprador', 'Aprovador'] &&
+             data.role in ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'] &&
              data.status in ['Ativo', 'Inativo'] &&
              (!('approvalLimit' in data) || data.approvalLimit is number) &&
              data.createdAt is timestamp;
@@ -253,28 +260,28 @@ service cloud.firestore {
 
     match /suppliers/{supplierId} {
       allow read: if canAccess();
-      allow create: if canAccess() && isValidSupplier(request.resource.data);
-      allow update: if canAccess() && isValidSupplier(request.resource.data);
+      allow create: if canAccess() && !isRequisitante() && isValidSupplier(request.resource.data);
+      allow update: if canAccess() && !isRequisitante() && isValidSupplier(request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /rfqs/{rfqId} {
       allow read: if canAccess();
       allow create: if canAccess() && isValidRFQ(request.resource.data);
-      allow update: if canAccess() && isValidRFQ(request.resource.data);
-      allow delete: if canAccess();
+      allow update: if canAccess() && !isRequisitante() && isValidRFQ(request.resource.data);
+      allow delete: if canAccess() && !isRequisitante();
     }
 
     match /purchase-orders/{poId} {
       allow read: if canAccess();
-      allow create: if canAccess() && isValidPO(request.resource.data);
-      allow update: if canAccess() && isValidPO(request.resource.data);
+      allow create: if canAccess() && !isRequisitante() && isValidPO(request.resource.data);
+      allow update: if canAccess() && !isRequisitante() && isValidPO(request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /families/{familyId} {
       allow read: if canAccess();
-      allow create: if canAccess() && request.resource.data.keys().hasAll(['name', 'createdAt']) && request.resource.data.name is string;
+      allow create: if canAccess() && !isRequisitante() && request.resource.data.keys().hasAll(['name', 'createdAt']) && request.resource.data.name is string;
       allow update, delete: if isAdmin();
     }
 
@@ -287,15 +294,15 @@ service cloud.firestore {
 
     match /contracts/{contractId} {
       allow read: if canAccess();
-      allow create: if canAccess() && isValidContract(request.resource.data);
-      allow update: if canAccess() && isValidContract(request.resource.data);
+      allow create: if canAccess() && !isRequisitante() && isValidContract(request.resource.data);
+      allow update: if canAccess() && !isRequisitante() && isValidContract(request.resource.data);
       allow delete: if isAdmin();
     }
 
     match /proposals/{proposalId} {
       allow read: if canAccess();
-      allow create: if canAccess() && isValidProposal(request.resource.data);
-      allow update: if canAccess() && isValidProposal(request.resource.data);
+      allow create: if canAccess() && !isRequisitante() && isValidProposal(request.resource.data);
+      allow update: if canAccess() && !isRequisitante() && isValidProposal(request.resource.data);
       allow delete: if isAdmin();
     }
 

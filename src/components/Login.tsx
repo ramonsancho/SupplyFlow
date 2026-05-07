@@ -43,16 +43,77 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [lockoutTimer, setLockoutTimer] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [captcha, setCaptcha] = useState<{question: string, answer: number} | null>(null);
+  const [captchaInput, setCaptchaInput] = useState('');
   const { addNotification } = useNotifications();
+
+  // Generate new math captcha
+  const generateCaptcha = () => {
+    const num1 = Math.floor(Math.random() * 10) + 1;
+    const num2 = Math.floor(Math.random() * 10) + 1;
+    setCaptcha({ question: `${num1} + ${num2}`, answer: num1 + num2 });
+    setCaptchaInput('');
+  };
+
+  // Effect to handle lockout countdown
+  React.useEffect(() => {
+    const checkLockout = () => {
+      const lockoutKey = `lockout_${email}`;
+      const lockoutData = localStorage.getItem(lockoutKey);
+      
+      if (lockoutData) {
+        const { until } = JSON.parse(lockoutData);
+        const now = Date.now();
+        if (now < until) {
+          setLockoutTimer(Math.ceil((until - now) / 1000));
+        } else {
+          setLockoutTimer(null);
+          // Optional: Clear only if we want to reset attempts after lockout expires
+          // localStorage.removeItem(lockoutKey);
+        }
+      } else {
+        setLockoutTimer(null);
+      }
+    };
+
+    const interval = setInterval(checkLockout, 1000);
+    checkLockout();
+    return () => clearInterval(interval);
+  }, [email]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check if locked
+    const lockoutKey = `lockout_${email}`;
+    const lockoutData = localStorage.getItem(lockoutKey);
+    if (lockoutData) {
+      const { until } = JSON.parse(lockoutData);
+      if (Date.now() < until) {
+        const remaining = Math.ceil((until - Date.now()) / 1000);
+        addNotification('Acesso Bloqueado', `Muitas tentativas falhas. Tente novamente em ${remaining} segundos.`, 'error');
+        return;
+      }
+    }
+
+    // Check captcha if active
+    if (captcha && parseInt(captchaInput) !== captcha.answer) {
+      addNotification('Segurança', 'O resultado da soma está incorreto. Tente novamente.', 'error');
+      generateCaptcha();
+      return;
+    }
+
     setIsLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+
+      // Reset lockout on success
+      localStorage.removeItem(lockoutKey);
+      localStorage.removeItem(`attempts_${email}`);
 
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
@@ -101,11 +162,31 @@ export default function Login() {
 
       addNotification('Bem-vindo!', 'Login realizado com sucesso.', 'success');
     } catch (error: any) {
+      // Handle failed attempt
+      const attemptsKey = `attempts_${email}`;
+      const currentAttempts = parseInt(localStorage.getItem(attemptsKey) || '0') + 1;
+      localStorage.setItem(attemptsKey, currentAttempts.toString());
+
+      // Show captcha after first failure
+      if (currentAttempts >= 1 && !captcha) {
+        generateCaptcha();
+      } else if (captcha) {
+        generateCaptcha();
+      }
+
+      if (currentAttempts >= 5) {
+        const lockoutUntil = Date.now() + (15 * 60 * 1000); // 15 minutes
+        localStorage.setItem(lockoutKey, JSON.stringify({ until: lockoutUntil }));
+        addNotification('Segurança', 'Muitas tentativas falhas. Acesso bloqueado por 15 minutos.', 'error');
+      }
+
       let message = 'Erro ao realizar login. Verifique suas credenciais.';
       if (error.code === 'auth/operation-not-allowed') {
         message = 'O provedor de E-mail/Senha não está ativado no Firebase Console.';
       } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        message = 'Email ou senha incorretos.';
+        message = `Email ou senha incorretos. Tentativa ${currentAttempts} de 5.`;
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Muitas tentativas bloqueadas pelo Firebase. Aguarde um momento.';
       }
       addNotification('Erro de Login', message, 'error');
     } finally {
@@ -387,13 +468,41 @@ export default function Login() {
               )}
             </AnimatePresence>
 
+            <AnimatePresence>
+              {captcha && !isFirstAccess && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Proteção Anti-Bot</label>
+                    <span className="text-[10px] font-bold text-slate-400">Quanto é {captcha.question}?</span>
+                  </div>
+                  <input 
+                    type="number"
+                    required
+                    value={captchaInput}
+                    onChange={(e) => setCaptchaInput(e.target.value)}
+                    placeholder="Resultado"
+                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl focus:border-brand-500 outline-none text-sm font-medium transition-colors"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <button 
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || lockoutTimer !== null}
               className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : lockoutTimer !== null ? (
+                <span className="flex items-center gap-2">
+                  Bloqueado ({lockoutTimer}s)
+                </span>
               ) : (
                 <>
                   <span>{isFirstAccess ? 'Configurar Acesso' : 'Entrar no Sistema'}</span>

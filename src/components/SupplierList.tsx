@@ -54,6 +54,7 @@ export default function SupplierList() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterCritical, setFilterCritical] = useState<boolean | null>(null);
   const [supplierToDelete, setSupplierToDelete] = useState<{id: string, name: string} | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
@@ -77,6 +78,18 @@ export default function SupplierList() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+        }
+      });
+      return () => unsubscribeUser();
+    }
   }, []);
 
   useEffect(() => {
@@ -158,19 +171,21 @@ export default function SupplierList() {
           <h2 className="text-4xl font-bold tracking-tight text-slate-900">Base de Fornecedores</h2>
           <p className="text-slate-500 mt-2 text-lg font-medium">Gerencie sua rede de parceiros estratégicos e categorias.</p>
         </div>
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            setEditingSupplier(undefined);
-            setIsReadOnly(false);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 transition-all duration-300 self-start"
-        >
-          <Plus size={20} />
-          <span>Cadastrar Parceiro</span>
-        </motion.button>
+        {currentUserProfile?.role !== 'Requisitante' && (
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setEditingSupplier(undefined);
+              setIsReadOnly(false);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 transition-all duration-300 self-start"
+          >
+            <Plus size={20} />
+            <span>Cadastrar Parceiro</span>
+          </motion.button>
+        )}
       </div>
 
       <SupplierModal 
@@ -383,28 +398,32 @@ export default function SupplierList() {
 
                 <div className="pt-8 border-t border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <motion.button 
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        setEditingSupplier(supplier);
-                        setIsReadOnly(false);
-                        setIsModalOpen(true);
-                      }}
-                      className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all"
-                      title="Editar"
-                    >
-                      <Edit size={18} />
-                    </motion.button>
-                    <motion.button 
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => setSupplierToDelete({ id: supplier.id, name: supplier.name })}
-                      className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all"
-                      title="Excluir"
-                    >
-                      <Trash2 size={18} />
-                    </motion.button>
+                    {currentUserProfile?.role !== 'Requisitante' && (
+                      <>
+                        <motion.button 
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => {
+                            setEditingSupplier(supplier);
+                            setIsReadOnly(false);
+                            setIsModalOpen(true);
+                          }}
+                          className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all"
+                          title="Editar"
+                        >
+                          <Edit size={18} />
+                        </motion.button>
+                        <motion.button 
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setSupplierToDelete({ id: supplier.id, name: supplier.name })}
+                          className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all"
+                          title="Excluir"
+                        >
+                          <Trash2 size={18} />
+                        </motion.button>
+                      </>
+                    )}
                   </div>
                   <button 
                     onClick={() => {

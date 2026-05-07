@@ -8,7 +8,7 @@ import { User } from '../types';
 const userSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
   email: z.string().email('Email inválido'),
-  role: z.enum(['Administrador', 'Comprador', 'Aprovador'] as const),
+  role: z.enum(['Administrador', 'Comprador', 'Aprovador', 'Requisitante'] as const),
   status: z.enum(['Ativo', 'Inativo'] as const),
   approvalLimit: z.number().min(0, 'O limite deve ser maior ou igual a 0').optional(),
 });
@@ -94,6 +94,7 @@ export default function UserModal({ isOpen, onClose, onSubmit, initialData }: Us
                 <option value="Administrador">Administrador</option>
                 <option value="Comprador">Comprador</option>
                 <option value="Aprovador">Aprovador</option>
+                <option value="Requisitante">Requisitante</option>
               </select>
               {errors.role && <p className="text-xs text-red-500 font-medium">{errors.role.message}</p>}
             </div>

@@ -580,13 +580,15 @@ export default function OCList() {
           <p className="text-[#8E9299] mt-1">Acompanhe pedidos, recebimentos e saldos.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
-          >
-            <Plus size={20} />
-            <span>Nova Ordem de Compra</span>
-          </button>
+          {currentUserProfile?.role !== 'Requisitante' && (
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+            >
+              <Plus size={20} />
+              <span>Nova Ordem de Compra</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -810,94 +812,103 @@ export default function OCList() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2 lg:max-w-[320px] self-center">
-                {oc.status === 'pending_approval' && (
+              <div className="flex flex-col gap-2 min-w-[280px] self-center">
+                <div className="flex items-center justify-end gap-2">
+                  {currentUserProfile?.role !== 'Requisitante' && oc.status === 'pending_approval' && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md"
+                    >
+                      <CheckCircle size={16} />
+                      <span>Aprovar</span>
+                    </button>
+                  )}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
+                      generatePDF(oc).catch(err => console.error('Error in generatePDF:', err));
                     }}
-                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md"
+                    disabled={oc.status === 'draft' || oc.status === 'pending_approval'}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#0052FF] rounded-lg hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                    title={oc.status === 'draft' || oc.status === 'pending_approval' ? "Aguardando Aprovação" : "Baixar PDF"}
                   >
-                    <CheckCircle size={16} />
-                    <span>Aprovar</span>
+                    <Download size={16} />
+                    <span>PDF</span>
                   </button>
-                )}
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    generatePDF(oc).catch(err => console.error('Error in generatePDF:', err));
-                  }}
-                  disabled={oc.status === 'draft' || oc.status === 'pending_approval'}
-                  className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#0052FF] rounded-lg hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={oc.status === 'draft' || oc.status === 'pending_approval' ? "Aguardando Aprovação" : "Baixar PDF"}
-                >
-                  <Download size={16} />
-                  <span>PDF</span>
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReceive(oc);
-                  }}
-                  disabled={oc.status === 'draft' || oc.status === 'pending_approval' || oc.status === 'received' || oc.status === 'closed' || oc.status === 'cancelled'}
-                  className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#141414] bg-[#F5F5F5] rounded-lg hover:bg-[#E5E5E5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Package size={16} />
-                  <span>Receber</span>
-                </button>
-                {(oc.status === 'approved' || oc.status === 'sent') && oc.receivedAmount === 0 && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPoToCancel({ id: oc.id, number: oc.number });
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all shadow-md"
-                    title="Cancelar Ordem"
-                  >
-                    <XCircle size={16} />
-                    <span>Cancelar</span>
-                  </button>
-                )}
-                {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador') && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPO(oc);
-                      setIsEditAmountModalOpen(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-all shadow-md"
-                    title="Editar Valor"
-                  >
-                    <Edit2 size={16} />
-                    <span>Editar Valor</span>
-                  </button>
-                )}
-                {oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && oc.status !== 'cancelled' && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPO(oc);
-                      setIsRatingModalOpen(true);
-                    }}
-                    disabled={oc.receivedAmount < oc.totalAmount}
-                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={oc.receivedAmount < oc.totalAmount ? "Recebimento incompleto" : "Concluir Ordem"}
-                  >
-                    <CheckSquare size={16} />
-                    <span>Concluir</span>
-                  </button>
-                )}
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPoToDelete({ id: oc.id, number: oc.number });
-                  }}
-                  className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
-                  title="Excluir"
-                >
-                  <Trash2 size={20} />
-                </button>
+                  {currentUserProfile?.role !== 'Requisitante' && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReceive(oc);
+                      }}
+                      disabled={oc.status === 'draft' || oc.status === 'pending_approval' || oc.status === 'received' || oc.status === 'closed' || oc.status === 'cancelled'}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#141414] bg-[#F5F5F5] rounded-lg hover:bg-[#E5E5E5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                    >
+                      <Package size={16} />
+                      <span>Receber</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  {currentUserProfile?.role !== 'Requisitante' && (oc.status === 'approved' || oc.status === 'sent') && oc.receivedAmount === 0 && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPoToCancel({ id: oc.id, number: oc.number });
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all shadow-md"
+                      title="Cancelar Ordem"
+                    >
+                      <XCircle size={16} />
+                      <span>Cancelar</span>
+                    </button>
+                  )}
+                  {currentUserProfile?.role !== 'Requisitante' && (currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador') && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPO(oc);
+                        setIsEditAmountModalOpen(true);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-all shadow-md"
+                      title="Editar Valor"
+                    >
+                      <Edit2 size={16} />
+                      <span>Editar Valor</span>
+                    </button>
+                  )}
+                  {currentUserProfile?.role !== 'Requisitante' && oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && oc.status !== 'cancelled' && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPO(oc);
+                        setIsRatingModalOpen(true);
+                      }}
+                      disabled={oc.receivedAmount < oc.totalAmount}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={oc.receivedAmount < oc.totalAmount ? "Recebimento incompleto" : "Concluir Ordem"}
+                    >
+                      <CheckSquare size={16} />
+                      <span>Concluir</span>
+                    </button>
+                  )}
+                  {currentUserProfile?.role !== 'Requisitante' && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPoToDelete({ id: oc.id, number: oc.number });
+                      }}
+                      className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-red-50 rounded-full transition-all"
+                      title="Excluir"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))

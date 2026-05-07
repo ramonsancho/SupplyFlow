@@ -44,6 +44,7 @@ export default function RFQList() {
   const [rfqToDelete, setRfqToDelete] = useState<{id: string, number: number} | null>(null);
   const [rfqToSendEmail, setRfqToSendEmail] = useState<{id: string, number: number, family: string} | null>(null);
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -70,6 +71,18 @@ export default function RFQList() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+        }
+      });
+      return () => unsubscribeUser();
+    }
   }, []);
 
   const handleSaveRFQ = async (data: any) => {
@@ -505,36 +518,40 @@ export default function RFQList() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center justify-end gap-2">
-                        <motion.button 
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRfqToEdit(rfq);
-                            setIsModalOpen(true);
-                          }}
-                          className="p-3 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-2xl transition-all duration-300"
-                          title="Editar RFQ"
-                        >
-                          <Edit3 size={18} />
-                        </motion.button>
-                        <motion.button 
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRfqToSendEmail({ id: rfq.id, number: rfq.number, family: rfq.family || '' });
-                          }}
-                          className={cn(
-                            "p-3 rounded-2xl transition-all duration-300",
-                            rfq.status === 'sent' 
-                              ? "text-emerald-600 bg-emerald-50" 
-                              : "text-brand-600 bg-brand-50 hover:bg-brand-100"
-                          )}
-                          title={rfq.status === 'sent' ? "Reenviar para Fornecedores" : "Disparar para Fornecedores"}
-                        >
-                          <Send size={18} />
-                        </motion.button>
+                        {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Comprador' || currentUserProfile?.role === 'Aprovador') && (
+                          <>
+                            <motion.button 
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRfqToEdit(rfq);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-3 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-2xl transition-all duration-300"
+                              title="Editar RFQ"
+                            >
+                              <Edit3 size={18} />
+                            </motion.button>
+                            <motion.button 
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRfqToSendEmail({ id: rfq.id, number: rfq.number, family: rfq.family || '' });
+                              }}
+                              className={cn(
+                                "p-3 rounded-2xl transition-all duration-300",
+                                rfq.status === 'sent' 
+                                  ? "text-emerald-600 bg-emerald-50" 
+                                  : "text-brand-600 bg-brand-50 hover:bg-brand-100"
+                              )}
+                              title={rfq.status === 'sent' ? "Reenviar para Fornecedores" : "Disparar para Fornecedores"}
+                            >
+                              <Send size={18} />
+                            </motion.button>
+                          </>
+                        )}
                         <motion.button 
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
@@ -547,18 +564,20 @@ export default function RFQList() {
                         >
                           <Download size={18} />
                         </motion.button>
-                        <motion.button 
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRfqToDelete({ id: rfq.id, number: rfq.number });
-                          }}
-                          className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all duration-300"
-                          title="Excluir"
-                        >
-                          <Trash2 size={18} />
-                        </motion.button>
+                        {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Comprador' || currentUserProfile?.role === 'Aprovador') && (
+                          <motion.button 
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRfqToDelete({ id: rfq.id, number: rfq.number });
+                            }}
+                            className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all duration-300"
+                            title="Excluir"
+                          >
+                            <Trash2 size={18} />
+                          </motion.button>
+                        )}
                         <ChevronRight size={20} className="text-slate-200 group-hover:text-brand-500 group-hover:translate-x-1 transition-all ml-2" />
                       </div>
                     </td>

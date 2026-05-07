@@ -233,13 +233,15 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
             <div className="lg:col-span-2 space-y-6">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-[#141414] uppercase tracking-widest">Propostas Recebidas</h4>
-                <button 
-                  onClick={() => setIsProposalModalOpen(true)}
-                  className="flex items-center gap-2 text-xs font-bold text-white bg-[#141414] px-4 py-2 rounded-xl hover:scale-105 transition-all shadow-md"
-                >
-                  <Plus size={16} />
-                  <span>Incluir Proposta</span>
-                </button>
+                {currentUserProfile?.role !== 'Requisitante' && (
+                  <button 
+                    onClick={() => setIsProposalModalOpen(true)}
+                    className="flex items-center gap-2 text-xs font-bold text-white bg-[#141414] px-4 py-2 rounded-xl hover:scale-105 transition-all shadow-md"
+                  >
+                    <Plus size={16} />
+                    <span>Incluir Proposta</span>
+                  </button>
+                )}
               </div>
 
               {isLoading ? (
@@ -282,7 +284,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                            proposal.status === 'accepted' ? 'Aceita' : 'Rejeitada'}
                         </span>
 
-                        {proposal.status === 'pending' && rfq.status !== 'closed' && (
+                         {proposal.status === 'pending' && rfq.status !== 'closed' && currentUserProfile?.role !== 'Requisitante' && (
                           <button 
                             onClick={() => handleAcceptProposal(proposal).catch(err => console.error('Error in handleAcceptProposal:', err))}
                             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md"

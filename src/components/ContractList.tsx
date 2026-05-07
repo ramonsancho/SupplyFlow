@@ -27,6 +27,7 @@ export default function ContractList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [contractToDelete, setContractToDelete] = useState<{id: string, supplierName: string} | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -60,6 +61,18 @@ export default function ContractList() {
       unsubscribeContracts();
       unsubscribeSuppliers();
     };
+  }, []);
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+        }
+      });
+      return () => unsubscribeUser();
+    }
   }, []);
 
   const filteredContracts = contracts.filter(c => 
@@ -148,16 +161,18 @@ export default function ContractList() {
           <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Contratos</h2>
           <p className="text-[#8E9299] mt-1">Gestão de contratos vigentes e reajustes.</p>
         </div>
-        <button 
-          onClick={() => {
-            setEditingContract(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2 px-6 py-3 bg-[#141414] text-white rounded-xl font-bold hover:bg-black transition-all shadow-lg shadow-black/10"
-        >
-          <Plus size={20} />
-          Novo Contrato
-        </button>
+        {currentUserProfile?.role !== 'Requisitante' && (
+          <button 
+            onClick={() => {
+              setEditingContract(null);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-[#141414] text-white rounded-xl font-bold hover:bg-black transition-all shadow-lg shadow-black/10"
+          >
+            <Plus size={20} />
+            Novo Contrato
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-3xl border border-[#E5E5E5] overflow-hidden shadow-sm">
@@ -232,21 +247,25 @@ export default function ContractList() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => {
-                          setEditingContract(contract);
-                          setIsModalOpen(true);
-                        }}
-                        className="p-2 text-[#8E9299] hover:text-[#141414] hover:bg-white rounded-lg transition-all"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => setContractToDelete({ id: contract.id, supplierName: contract.supplierName })}
-                        className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-white rounded-lg transition-all"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {currentUserProfile?.role !== 'Requisitante' && (
+                        <>
+                          <button 
+                            onClick={() => {
+                              setEditingContract(contract);
+                              setIsModalOpen(true);
+                            }}
+                            className="p-2 text-[#8E9299] hover:text-[#141414] hover:bg-white rounded-lg transition-all"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => setContractToDelete({ id: contract.id, supplierName: contract.supplierName })}
+                            className="p-2 text-[#8E9299] hover:text-[#FF4444] hover:bg-white rounded-lg transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
