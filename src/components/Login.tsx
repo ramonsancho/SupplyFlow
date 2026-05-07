@@ -58,6 +58,12 @@ export default function Login() {
     setCaptchaInput('');
   };
 
+  React.useEffect(() => {
+    if (!captcha && !isFirstAccess) {
+      generateCaptcha();
+    }
+  }, [isFirstAccess]);
+
   // Effect to handle lockout countdown
   React.useEffect(() => {
     const checkLockout = () => {

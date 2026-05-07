@@ -205,10 +205,26 @@ export default function UserList() {
       setEditingUser(undefined);
     } catch (error: any) {
       console.error('User save error:', error);
+      let message = 'Não foi possível salvar o usuário.';
+      
+      if (error.code === 'permission-denied') {
+        message = 'Permissão negada. Verifique se você tem autorização para esta ação.';
+      } else if (error.message) {
+        // Tentamos extrair uma mensagem mais amigável do erro JSON se for o caso
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed.error) message = `Erro no banco: ${parsed.error}`;
+        } catch (e) {
+          message = error.message;
+        }
+      }
+      
+      await addNotification('Erro', message, 'error');
+      
       try {
         handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
       } catch (e) {
-        await addNotification('Erro', 'Não foi possível salvar o usuário.', 'error');
+        // Já notificamos o usuário acima
       }
     }
   };

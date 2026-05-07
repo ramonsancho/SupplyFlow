@@ -167,7 +167,7 @@ service cloud.firestore {
       return hasRequiredFields(['number', 'title', 'status', 'items', 'createdAt']) &&
              data.number is int &&
              isValidString(data.title, 1, 100) &&
-             data.status in ['draft', 'sent', 'closed'] &&
+             ['draft', 'sent', 'closed'].hasAny([data.status]) &&
              data.items is list &&
              data.createdAt is timestamp;
     }
@@ -176,7 +176,7 @@ service cloud.firestore {
       return hasRequiredFields(['number', 'supplierId', 'supplierName', 'status', 'totalAmount', 'receivedAmount', 'items', 'createdAt']) &&
              data.number is int &&
              data.supplierId is string &&
-             data.status in ['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled'] &&
+             ['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled'].hasAny([data.status]) &&
              data.totalAmount is number && data.totalAmount >= 0 &&
              (!('originalAmount' in data) || (data.originalAmount is number && data.originalAmount >= 0)) &&
              data.receivedAmount is number && data.receivedAmount >= 0 &&
@@ -208,7 +208,7 @@ service cloud.firestore {
              data.userId == request.auth.uid &&
              isValidString(data.title, 1, 100) &&
              isValidString(data.message, 1, 500) &&
-             data.type in ['info', 'success', 'warning', 'error'] &&
+             ['info', 'success', 'warning', 'error'].hasAny([data.type]) &&
              data.read is bool &&
              data.timestamp is timestamp;
     }
@@ -219,7 +219,7 @@ service cloud.firestore {
              data.supplierName is string &&
              data.startDate is string &&
              data.endDate is string &&
-             data.status in ['active', 'expired', 'terminated'] &&
+             ['active', 'expired', 'terminated'].hasAny([data.status]) &&
              (!('lastAdjustmentDate' in data) || data.lastAdjustmentDate is string) &&
              (!('lastAdjustmentPercentage' in data) || data.lastAdjustmentPercentage is number) &&
              data.createdAt is timestamp;
@@ -232,7 +232,7 @@ service cloud.firestore {
              data.supplierName is string &&
              data.totalValue is number && data.totalValue >= 0 &&
              data.deliveryDate is string &&
-             data.status in ['pending', 'accepted', 'rejected'] &&
+             ['pending', 'accepted', 'rejected'].hasAny([data.status]) &&
              data.items is list &&
              data.createdAt is timestamp;
     }
@@ -241,8 +241,8 @@ service cloud.firestore {
       return hasRequiredFields(['name', 'email', 'role', 'status', 'createdAt']) &&
              isValidString(data.name, 1, 100) &&
              isValidEmail(data.email) &&
-             data.role in ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'] &&
-             data.status in ['Ativo', 'Inativo'] &&
+             ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'].hasAny([data.role]) &&
+             ['Ativo', 'Inativo'].hasAny([data.status]) &&
              (!('approvalLimit' in data) || data.approvalLimit is number) &&
              data.createdAt is timestamp;
     }
