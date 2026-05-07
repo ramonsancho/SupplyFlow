@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import SupplierModal from './SupplierModal';
 import ConfirmModal from './ConfirmModal';
-import { Supplier } from '../types';
+import { Supplier, User } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';

@@ -180,15 +180,34 @@ export default function Dashboard() {
 
     const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
     const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
-    if (acceptedProposal && rfqProposals.length >= 2) {
-      const prices = rfqProposals.map(p => p.totalValue).filter(v => typeof v === 'number' && !isNaN(v));
-      if (prices.length >= 2) {
-        const maxPrice = Math.max(...prices);
-        const savings = maxPrice - (acceptedProposal.totalValue || 0);
-        return acc + (isNaN(savings) ? 0 : Math.max(0, savings));
+    
+    let rfqSavings = 0;
+
+    if (acceptedProposal) {
+      // Add explicit discount
+      rfqSavings += (acceptedProposal.discountValue || 0);
+
+      // Add market savings (if multiple bidders)
+      if (rfqProposals.length >= 2) {
+        // To avoid double counting the discount when comparing with competitors,
+        // we use the accepted price BEFORE the negotiated discount
+        const acceptedPriceBeforeDiscount = (acceptedProposal.totalValue || 0) + (acceptedProposal.discountValue || 0);
+        const competitorPrices = rfqProposals
+          .filter(p => p.id !== acceptedProposal.id)
+          .map(p => p.totalValue)
+          .filter(v => typeof v === 'number' && !isNaN(v));
+
+        if (competitorPrices.length > 0) {
+          const maxCompetitorPrice = Math.max(...competitorPrices);
+          const marketDiff = maxCompetitorPrice - acceptedPriceBeforeDiscount;
+          if (marketDiff > 0) {
+            rfqSavings += marketDiff;
+          }
+        }
       }
     }
-    return acc;
+    
+    return acc + (isNaN(rfqSavings) ? 0 : Math.max(0, rfqSavings));
   }, 0);
 
   const openPOsCount = filteredPOs.filter(po => po.status !== 'received' && po.status !== 'closed').length;
@@ -299,14 +318,29 @@ export default function Dashboard() {
     if (monthIndex !== -1) {
       const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
       const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
-      if (acceptedProposal && rfqProposals.length >= 2) {
-        const prices = rfqProposals.map(p => p.totalValue).filter(v => typeof v === 'number' && !isNaN(v));
-        if (prices.length >= 2) {
-          const maxPrice = Math.max(...prices);
-          const savings = maxPrice - (acceptedProposal.totalValue || 0);
-          if (!isNaN(savings)) {
-            monthlyHistory[monthIndex].savings += Math.max(0, savings);
+      
+      let rfqSavings = 0;
+      if (acceptedProposal) {
+        rfqSavings += (acceptedProposal.discountValue || 0);
+
+        if (rfqProposals.length >= 2) {
+          const acceptedPriceBeforeDiscount = (acceptedProposal.totalValue || 0) + (acceptedProposal.discountValue || 0);
+          const competitorPrices = rfqProposals
+            .filter(p => p.id !== acceptedProposal.id)
+            .map(p => p.totalValue)
+            .filter(v => typeof v === 'number' && !isNaN(v));
+
+          if (competitorPrices.length > 0) {
+            const maxCompetitorPrice = Math.max(...competitorPrices);
+            const marketDiff = maxCompetitorPrice - acceptedPriceBeforeDiscount;
+            if (marketDiff > 0) {
+              rfqSavings += marketDiff;
+            }
           }
+        }
+        
+        if (!isNaN(rfqSavings)) {
+          monthlyHistory[monthIndex].savings += Math.max(0, rfqSavings);
         }
       }
     }

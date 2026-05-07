@@ -21,7 +21,7 @@ import {
 import RFQModal from './RFQModal';
 import ConfirmModal from './ConfirmModal';
 import RFQDetailsModal from './RFQDetailsModal';
-import { RFQ } from '../types';
+import { RFQ, User } from '../types';
 import { emailService } from '../services/emailService';
 import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, deleteDoc, getDoc, getDocs, where, updateDoc } from 'firebase/firestore';

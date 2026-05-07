@@ -13,9 +13,9 @@ import {
   XCircle,
   Clock
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType, formatDate } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { Contract, Supplier } from '../types';
+import { Contract, Supplier, User } from '../types';
 import ContractModal from './ContractModal';
 import ConfirmModal from './ConfirmModal';
 import { Tag as TagIcon } from 'lucide-react';
