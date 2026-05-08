@@ -158,11 +158,19 @@ export default function UserList() {
         });
 
         if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || 'Erro ao criar usuário no servidor');
+          const text = await response.text();
+          let errorMessage = text || 'Erro ao criar usuário no servidor';
+          try {
+            const errData = JSON.parse(text);
+            errorMessage = errData.error || errorMessage;
+          } catch (e) {
+            // Keep text as errorMessage
+          }
+          throw new Error(errorMessage);
         }
 
-        const { uid } = await response.json();
+        const responseData = await response.json();
+        const uid = responseData.uid;
         
         // Enviar convite usando a nova API segura
         try {

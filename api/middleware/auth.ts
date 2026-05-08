@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import admin from 'firebase-admin';
+import { getDb } from '../lib/firebase';
 
 export interface AuthenticatedRequest extends Request {
   user?: admin.auth.DecodedIdToken;
@@ -23,7 +24,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
     const isBootstrap = bootstrapEmail && decodedToken.email?.toLowerCase().trim() === bootstrapEmail && decodedToken.email_verified;
 
     // Check status in Firestore
-    const userDoc = await admin.firestore().collection("users").doc(decodedToken.uid).get();
+    const userDoc = await getDb().collection("users").doc(decodedToken.uid).get();
     if (!userDoc.exists) {
       if (isBootstrap) {
         // Special case: allow bootstrap admin to perform initial actions (like creating themselves)

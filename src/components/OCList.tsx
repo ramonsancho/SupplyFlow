@@ -254,14 +254,13 @@ export default function OCList() {
       });
 
       if (!response.ok) {
-        let errorMessage = 'Erro ao aprovar OC no servidor';
+        const text = await response.text();
+        let errorMessage = text || 'Erro ao aprovar OC no servidor';
         try {
-          const errData = await response.json();
+          const errData = JSON.parse(text);
           errorMessage = errData.error || errorMessage;
         } catch (e) {
-          // If not JSON, get text
-          const text = await response.text();
-          errorMessage = text || errorMessage;
+          // If not JSON, use the raw text already captured in text variable
         }
         throw new Error(errorMessage);
       }

@@ -15,7 +15,7 @@ try {
       admin.initializeApp({
         projectId: firebaseConfig.projectId,
       });
-      console.log("[Server] Firebase Admin initialized.");
+      console.log(`[Server] Firebase Admin initialized.`);
     }
   }
 } catch (err) {

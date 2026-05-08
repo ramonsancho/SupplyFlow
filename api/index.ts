@@ -3,6 +3,7 @@ import admin from "firebase-admin";
 import "dotenv/config";
 import { authenticate, requireAdmin, requireRole } from "./middleware/auth";
 import { sendSecureEmail } from "./services/emailService";
+import { getDb } from "./lib/firebase";
 
 const app = express();
 const apiRouter = express.Router();
@@ -17,7 +18,7 @@ apiRouter.get("/health", (req, res) => {
 // 1.1 Sync/Bootstrap Auth
 apiRouter.post("/auth/sync", authenticate, async (req: any, res) => {
   try {
-    const userRef = admin.firestore().collection("users").doc(req.user.uid);
+    const userRef = getDb().collection("users").doc(req.user.uid);
     const userSnap = await userRef.get();
     
     if (!userSnap.exists && req.isAdmin) {
@@ -60,7 +61,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
       displayName: name,
     });
 
-    await admin.firestore().collection("users").doc(userRecord.uid).set({
+    await getDb().collection("users").doc(userRecord.uid).set({
       name,
       email,
       role,
@@ -71,7 +72,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
     });
 
     // Auditoria
-    await admin.firestore().collection("audit-logs").add({
+    await getDb().collection("audit-logs").add({
       userId: req.user.uid,
       userEmail: req.user.email,
       action: 'USER_CREATE',
@@ -96,13 +97,13 @@ apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res
 
   try {
     await admin.auth().deleteUser(uid);
-    await admin.firestore().collection("users").doc(uid).update({ 
+    await getDb().collection("users").doc(uid).update({ 
       status: 'Inativo',
       deactivatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Auditoria
-    await admin.firestore().collection("audit-logs").add({
+    await getDb().collection("audit-logs").add({
       userId: req.user.uid,
       userEmail: req.user.email,
       action: 'USER_DELETE',
@@ -125,10 +126,11 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
   try {
     console.log(`[API] Approving PO ${poId} by ${req.user.uid} (${req.userData.role})`);
     
-    const poRef = admin.firestore().collection("purchase-orders").doc(poId);
+    const db = getDb();
+    const poRef = db.collection("purchase-orders").doc(poId);
     
     // Process in a transaction to ensure no double-approval or race condition
-    const result = await admin.firestore().runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction) => {
       const poDoc = await transaction.get(poRef);
       if (!poDoc.exists) throw new Error("OC não encontrada.");
       
@@ -153,7 +155,7 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
       });
 
       // Auditoria Automática (dentro da transação)
-      const auditRef = admin.firestore().collection("audit-logs").doc();
+      const auditRef = db.collection("audit-logs").doc();
       transaction.set(auditRef, {
         userId: req.user.uid,
         userEmail: req.user.email,
