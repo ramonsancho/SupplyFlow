@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -78,6 +79,30 @@ export default function OCList() {
   const [isLoading, setIsLoading] = useState(true);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
+  const location = useLocation();
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.highlightId && !isLoading) {
+      const id = location.state.highlightId;
+      setHighlightedId(id);
+      
+      // Scroll to element after a short delay to ensure rendering
+      setTimeout(() => {
+        const element = document.getElementById(`oc-${id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+
+      // Remove highlight after 3 seconds
+      const timer = setTimeout(() => {
+        setHighlightedId(null);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [location.state, isLoading]);
 
   useEffect(() => {
     if (auth.currentUser) {
@@ -748,11 +773,15 @@ export default function OCList() {
             .map((oc) => (
             <div 
               key={oc.id} 
+              id={`oc-${oc.id}`}
               onClick={() => {
                 setSelectedPOForHistory(oc);
                 setIsHistoryModalOpen(true);
               }}
-              className="bg-white rounded-3xl border border-[#E5E5E5] p-6 hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center gap-8 cursor-pointer group"
+              className={cn(
+                "bg-white rounded-3xl border p-6 hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center gap-8 cursor-pointer group",
+                highlightedId === oc.id ? "border-brand-500 ring-2 ring-brand-500/20 shadow-lg" : "border-[#E5E5E5]"
+              )}
             >
               <div className="flex-1 min-w-[200px]">
                 <div className="flex items-center gap-3 mb-2">

@@ -107,47 +107,48 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onFormSubmit)} className="p-8 space-y-8 overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2 space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Título da Cotação</label>
-              <input 
-                {...register('title')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
-                placeholder="Ex: Aquisição de Material de Escritório - Q2"
-              />
-              {errors.title && <p className="text-xs text-red-500 font-medium">{errors.title.message}</p>}
-            </div>
+        <form onSubmit={handleSubmit(onFormSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          {/* Main Fields - Static */}
+          <div className="p-8 pb-4 space-y-6 shrink-0 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Título da Cotação</label>
+                <input 
+                  {...register('title')}
+                  className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                  placeholder="Ex: Aquisição de Material de Escritório - Q2"
+                />
+                {errors.title && <p className="text-xs text-red-500 font-medium">{errors.title.message}</p>}
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Família de Fornecimento</label>
-              <div className="relative">
-                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
-                <select 
-                  {...register('family')}
-                  className="w-full pl-12 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all appearance-none"
-                >
-                  <option value="">Selecione uma família...</option>
-                  {families.map(family => (
-                    <option key={family} value={family}>{family}</option>
-                  ))}
-                </select>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Família de Fornecimento</label>
+                <div className="relative">
+                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+                  <select 
+                    {...register('family')}
+                    className="w-full pl-12 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all appearance-none"
+                  >
+                    <option value="">Selecione uma família...</option>
+                    {families.map(family => (
+                      <option key={family} value={family}>{family}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Data Desejada para Entrega</label>
+                <input 
+                  type="date"
+                  {...register('desiredDate')}
+                  className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                />
+                {errors.desiredDate && <p className="text-xs text-red-500 font-medium">{errors.desiredDate.message}</p>}
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Data Desejada para Entrega</label>
-              <input 
-                type="date"
-                {...register('desiredDate')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
-              />
-              {errors.desiredDate && <p className="text-xs text-red-500 font-medium">{errors.desiredDate.message}</p>}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-4">
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Itens da Cotação</label>
               <button 
                 type="button"
@@ -158,8 +159,12 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
                 <span>Adicionar Item</span>
               </button>
             </div>
+            {errors.items && <p className="text-xs text-red-500 font-medium">{errors.items.message}</p>}
+          </div>
 
-            <div className="space-y-3">
+          {/* Items List - Scrollable */}
+          <div className="flex-1 overflow-y-auto px-8 py-2">
+            <div className="space-y-3 pb-8">
               {fields.map((field, index) => (
                 <div key={field.id} className="flex flex-col md:flex-row gap-4 p-4 bg-[#F5F5F5] rounded-2xl relative group">
                   <div className="flex-1 space-y-2">
@@ -196,10 +201,10 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
                 </div>
               ))}
             </div>
-            {errors.items && <p className="text-xs text-red-500 font-medium">{errors.items.message}</p>}
           </div>
 
-          <div className="pt-6 border-t border-[#E5E5E5] flex items-center justify-end gap-4">
+          {/* Footer - Static */}
+          <div className="p-8 pt-6 border-t border-[#E5E5E5] flex items-center justify-end gap-4 shrink-0 bg-white">
             <button 
               type="button"
               onClick={onClose}
@@ -212,7 +217,7 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
               className="flex items-center gap-2 bg-[#141414] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
             >
               <Save size={20} />
-              <span>Gerar RFQ</span>
+              <span>{initialData ? 'Salvar Alterações' : 'Gerar RFQ'}</span>
             </button>
           </div>
         </form>

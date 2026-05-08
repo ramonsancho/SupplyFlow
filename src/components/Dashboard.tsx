@@ -663,6 +663,7 @@ export default function Dashboard() {
                   tickFormatter={(value) => `R$ ${value / 1000}k`}
                 />
                 <Tooltip 
+                  formatter={(value: number) => `R$ ${formatCurrency(value)}`}
                   contentStyle={{ 
                     backgroundColor: '#0f172a', 
                     border: 'none', 
@@ -814,7 +815,11 @@ export default function Dashboard() {
               const isOverdue = deliveryDate < now;
               
               return (
-                <div key={po.id} className="p-6 flex items-start gap-5 hover:bg-slate-50 transition-all duration-300 cursor-pointer group">
+                <div 
+                  key={po.id} 
+                  onClick={() => navigate('/purchase-orders', { state: { highlightId: po.id } })}
+                  className="p-6 flex items-start gap-5 hover:bg-slate-50 transition-all duration-300 cursor-pointer group"
+                >
                   <div className={cn(
                     "p-3 rounded-2xl group-hover:scale-110 transition-transform",
                     isOverdue ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
