@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import admin from 'firebase-admin';
+import { getDb } from '../lib/firebase';
 
 let DOMPurify: any = null;
 
@@ -96,7 +97,7 @@ export const sendSecureEmail = async ({ to, subject, templateName, context, user
   const info = await transporter.sendMail(mailOptions);
   
   // Log the email action
-  await admin.firestore().collection('audit-logs').add({
+  await getDb().collection('audit-logs').add({
     userId,
     action: 'EMAIL_SENT',
     entity: 'system',

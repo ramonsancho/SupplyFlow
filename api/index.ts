@@ -29,8 +29,8 @@ apiRouter.post("/auth/sync", authenticate, async (req: any, res) => {
         role: 'Administrador',
         status: 'Ativo',
         uid: req.user.uid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.Timestamp.now()
       });
       return res.json({ success: true, created: true });
     }
@@ -67,7 +67,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
       role,
       status: 'Ativo',
       approvalLimit: approvalLimit || 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.Timestamp.now(),
       createdBy: req.user.uid
     });
 
@@ -78,7 +78,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
       action: 'USER_CREATE',
       entity: 'users',
       entityId: userRecord.uid,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: admin.firestore.Timestamp.now(),
       details: { email, role }
     });
 
@@ -99,7 +99,7 @@ apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res
     await admin.auth().deleteUser(uid);
     await getDb().collection("users").doc(uid).update({ 
       status: 'Inativo',
-      deactivatedAt: admin.firestore.FieldValue.serverTimestamp()
+      deactivatedAt: admin.firestore.Timestamp.now()
     });
 
     // Auditoria
@@ -109,7 +109,7 @@ apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res
       action: 'USER_DELETE',
       entity: 'users',
       entityId: uid,
-      timestamp: admin.firestore.FieldValue.serverTimestamp()
+      timestamp: admin.firestore.Timestamp.now()
     });
 
     res.json({ success: true });
@@ -129,41 +129,53 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
     const db = getDb();
     const poRef = db.collection("purchase-orders").doc(poId);
     
+    console.log(`[API] Starting transaction for PO ${poId}`);
+    
     // Process in a transaction to ensure no double-approval or race condition
     const result = await db.runTransaction(async (transaction) => {
+      console.log(`[API] Transaction running for PO ${poId}`);
       const poDoc = await transaction.get(poRef);
       if (!poDoc.exists) throw new Error("OC não encontrada.");
       
       const poData = poDoc.data()!;
+      console.log(`[API] PO Data status: ${poData.status}`);
       if (poData.status === 'approved') throw new Error("OC já está aprovada.");
 
       // Validate approval limit for non-admins
-      if (req.userData.role === 'Aprovador') {
-        const limit = req.userData.approvalLimit || 0;
-        console.log(`[API] Approver limit: ${limit}, PO total: ${poData.totalAmount}`);
-        if ((poData.totalAmount || 0) > limit) {
-          throw new Error(`Limite insuficiente para aprovação. Seu limite é R$ ${limit}`);
+      const userRole = req.userData?.role;
+      if (userRole === 'Aprovador') {
+        const limit = Number(req.userData.approvalLimit || 0);
+        const poTotal = Number(poData.totalAmount || 0);
+        console.log(`[API] Approver limit: ${limit}, PO total: ${poTotal}`);
+        if (poTotal > limit) {
+          throw new Error(`Limite insuficiente para aprovação. Seu limite é R$ ${limit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
         }
       }
 
+      const now = admin.firestore.Timestamp.now();
+      
       transaction.update(poRef, {
         status: 'approved',
-        approvedBy: req.user.uid,
-        approvedByName: req.userData.name,
-        approvedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        approvedBy: req.user?.uid || 'unknown',
+        approvedByName: req.userData?.name || 'Unknown',
+        approvedAt: now,
+        updatedAt: now
       });
 
       // Auditoria Automática (dentro da transação)
       const auditRef = db.collection("audit-logs").doc();
       transaction.set(auditRef, {
-        userId: req.user.uid,
-        userEmail: req.user.email,
+        userId: req.user?.uid || 'unknown',
+        userEmail: req.user?.email || 'unknown',
         action: 'APPROVE_PO',
         entity: 'purchase-orders',
         entityId: poId,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        details: { amount: poData.totalAmount, number: poData.number }
+        timestamp: now,
+        details: { 
+          amount: poData.totalAmount, 
+          number: poData.number,
+          role: userRole
+        }
       });
 
       return { success: true };
