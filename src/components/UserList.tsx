@@ -152,7 +152,8 @@ export default function UserList() {
             email: data.email,
             password: Math.random().toString(36).slice(-8) + 'A1!', // Temporary random password
             name: data.name,
-            role: data.role
+            role: data.role,
+            approvalLimit: data.approvalLimit || 0
           })
         });
 

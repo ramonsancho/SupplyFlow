@@ -42,7 +42,7 @@ apiRouter.post("/auth/sync", authenticate, async (req: any, res) => {
 
 // 2. User Management (Secure)
 apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, approvalLimit } = req.body;
   
   if (!email || !name || !role) {
     return res.status(400).json({ error: "Campos obrigatórios ausentes." });
@@ -65,6 +65,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
       email,
       role,
       status: 'Ativo',
+      approvalLimit: approvalLimit || 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       createdBy: req.user.uid
     });
@@ -122,6 +123,8 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
   if (!poId) return res.status(400).json({ error: "ID da OC é obrigatório." });
 
   try {
+    console.log(`[API] Approving PO ${poId} by ${req.user.uid} (${req.userData.role})`);
+    
     const poRef = admin.firestore().collection("purchase-orders").doc(poId);
     
     // Process in a transaction to ensure no double-approval or race condition
@@ -135,6 +138,7 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
       // Validate approval limit for non-admins
       if (req.userData.role === 'Aprovador') {
         const limit = req.userData.approvalLimit || 0;
+        console.log(`[API] Approver limit: ${limit}, PO total: ${poData.totalAmount}`);
         if ((poData.totalAmount || 0) > limit) {
           throw new Error(`Limite insuficiente para aprovação. Seu limite é R$ ${limit}`);
         }
@@ -163,8 +167,10 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
       return { success: true };
     });
 
+    console.log(`[API] PO ${poId} approved successfully`);
     res.json(result);
   } catch (error: any) {
+    console.error(`[API] PO Approve Error:`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -196,6 +202,15 @@ app.use("/", apiRouter);
 // Catch-all para rotas não encontradas
 app.all("*", (req, res) => {
   res.status(404).json({ error: `Rota não encontrada: ${req.path}` });
+});
+
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("[API Global Error]:", err);
+  res.status(err.status || 500).json({ 
+    error: err.message || "Erro interno do servidor",
+    path: req.path
+  });
 });
 
 export default app;
