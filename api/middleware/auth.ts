@@ -19,8 +19,8 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
     req.user = decodedToken;
     
     // Check for bootstrap admin via env if needed, but prefer Firestore
-    const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
-    const isBootstrap = bootstrapEmail && decodedToken.email === bootstrapEmail && decodedToken.email_verified;
+    const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.toLowerCase().trim();
+    const isBootstrap = bootstrapEmail && decodedToken.email?.toLowerCase().trim() === bootstrapEmail && decodedToken.email_verified;
 
     // Check status in Firestore
     const userDoc = await admin.firestore().collection("users").doc(decodedToken.uid).get();

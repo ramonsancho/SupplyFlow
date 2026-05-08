@@ -1,11 +1,29 @@
+import 'dotenv/config';
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import api from "./api/index";
+import fs from "fs";
+import * as admin from 'firebase-admin';
 
-import helmet from "helmet";
-import { rateLimit } from "express-rate-limit";
+// Initialize Firebase Admin globally at the top
+try {
+  if (!admin.apps.length) {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId,
+      });
+      console.log("[Server] Firebase Admin initialized.");
+    }
+  }
+} catch (err) {
+  console.error("[Server] Firebase Admin Init Error:", err);
+}
+
+// Now import the API
+import api from "./api/index";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,42 +33,20 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Security: Global Rate Limiting
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500, // Developer friendly limit
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: "Muitas requisições, tente novamente mais tarde."
+  // Simple Request Logging
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
   });
 
-  // Security: Helmet with AI Studio fixes
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com", "https://www.gstatic.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com", "https://*.gstatic.com", "https://*.firebaseapp.com"],
-        connectSrc: ["'self'", "https://*.googleapis.com", "https://*.firebaseio.com", "wss://*.googleapis.com", "https://*.firebasedatabase.app"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'self'", "https://*.run.app", "https://*.firebaseapp.com", "https://*.google.com"],
-        upgradeInsecureRequests: [],
-      },
-    },
-    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-    hsts: false, // Keep disabled for dev container access if needed
-    frameguard: false // REQUIRED: AI Studio preview runs in an iframe
-  }));
+  // Health check
+  app.get("/api/health-check", (req, res) => res.json({ status: "ok" }));
 
-  app.use("/api/", limiter);
-
-  console.log("[Server] Mounting API...");
+  // API Routes
   app.use("/api", api);
 
   if (process.env.NODE_ENV !== "production") {
+    console.log("[Server] Starting Vite Dev Middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -63,11 +59,11 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] Running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Listening on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch(err => {
-  console.error("[Server] Fatal error:", err);
+  console.error("[Server] FATAL ERROR:", err);
   process.exit(1);
 });

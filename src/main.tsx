@@ -10,9 +10,13 @@ window.addEventListener('error', (event) => {
 
 window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled promise rejection event:', event);
-  console.error('Reason:', event.reason);
-  if (event.reason && event.reason.stack) {
-    console.error('Stack trace:', event.reason.stack);
+  console.error('Reason Object:', event.reason);
+  if (event.reason) {
+    console.error('Reason String:', String(event.reason));
+    if (event.reason.message) console.error('Reason Message:', event.reason.message);
+    if (event.reason.stack) {
+      console.error('Stack trace:', event.reason.stack);
+    }
   }
 });
 

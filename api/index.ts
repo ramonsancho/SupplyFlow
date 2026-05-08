@@ -11,7 +11,7 @@ app.use(express.json());
 
 // 1. Health check
 apiRouter.get("/health", (req, res) => {
-  res.json({ status: "ok", version: "2.4-professional", auth: admin.apps.length > 0 });
+  res.json({ status: "ok", version: "3.0-enterprise", auth: admin.apps.length > 0 });
 });
 
 // 1.1 Sync/Bootstrap Auth

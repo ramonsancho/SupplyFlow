@@ -169,7 +169,7 @@ export default function Layout() {
               Sair do Sistema
             </button>
           </div>
-          <p className="text-[10px] text-center text-slate-400 mt-4 font-bold tracking-widest uppercase">Version 2.4</p>
+          <p className="text-[10px] text-center text-slate-400 mt-4 font-bold tracking-widest uppercase">Version 3.0</p>
         </div>
       </aside>
 
