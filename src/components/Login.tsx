@@ -16,7 +16,6 @@ import {
   auth, 
   db 
 } from '../firebase';
-import { isBootstrapAdmin } from '../constants';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
@@ -126,9 +125,6 @@ export default function Login() {
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        if (isBootstrapAdmin(user.email) && userData.role !== 'Administrador') {
-          await setDoc(userRef, { ...userData, role: 'Administrador' }, { merge: true }).catch(e => console.error('Error updating bootstrap admin:', e));
-        }
 
         if (userData.status === 'Inativo') {
           await signOut(auth).catch(e => console.error('Sign out error:', e));
@@ -137,30 +133,21 @@ export default function Login() {
           return;
         }
       } else {
-        const q = query(collection(db, 'users'), where('email', '==', email));
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
+        // Try to sync/bootstrap via API
+        try {
+          const idToken = await user.getIdToken();
+          const response = await fetch('/api/auth/sync', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro na sincronização de perfil.');
+          }
+        } catch (syncError: any) {
           await signOut(auth).catch(e => console.error('Sign out error:', e));
-          addNotification('Acesso Negado', 'Este email não está autorizado no sistema.', 'error');
-          setIsLoading(false);
-          return;
-        }
-
-        const authData = querySnapshot.docs[0].data();
-        await setDoc(doc(db, 'users', user.uid), {
-          ...authData,
-          uid: user.uid,
-          updatedAt: serverTimestamp()
-        }).catch(e => console.error('Error syncing user data:', e));
-
-        if (querySnapshot.docs[0].id !== user.uid) {
-          await deleteDoc(doc(db, 'users', querySnapshot.docs[0].id)).catch(e => console.error('Error deleting old user doc:', e));
-        }
-
-        if (authData.status === 'Inativo') {
-          await signOut(auth).catch(e => console.error('Sign out error:', e));
-          addNotification('Acesso Negado', 'Sua conta está inativa.', 'error');
+          addNotification('Acesso Negado', syncError.message || 'Seu usuário não está autorizado.', 'error');
           setIsLoading(false);
           return;
         }
@@ -220,42 +207,29 @@ export default function Login() {
       const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
       const querySnapshot = await getDocs(q);
 
-      const isBootstrap = isBootstrapAdmin(email);
-
-      if (querySnapshot.empty && !isBootstrap) {
+      if (querySnapshot.empty) {
+        // If not in firestore, we don't allow registration unless specifically authorized by admin previously
+        // Check for bootstrap admin via env could be done here too, but it's cleaner via backend
         await user.delete();
         await signOut(auth);
-        addNotification('Acesso Negado', 'Este email não está autorizado no sistema.', 'error');
+        addNotification('Acesso Negado', 'Este email não está autorizado no sistema. Entre em contato com o administrador.', 'error');
         setIsLoading(false);
         return;
       }
 
-      if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0];
-        const userData = userDoc.data();
-        let createdAt = userData.createdAt;
-        if (typeof createdAt === 'string') createdAt = new Date(createdAt);
-        
-        await setDoc(doc(db, 'users', uid), {
-          ...userData,
-          uid: uid,
-          createdAt: createdAt || serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }).catch(e => console.error('Error syncing user data on first access:', e));
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+      
+      // Update the user document with the actual UID from Auth
+      await setDoc(doc(db, 'users', uid), {
+        ...userData,
+        uid: uid,
+        updatedAt: serverTimestamp()
+      }).catch(e => console.error('Error syncing user data on first access:', e));
 
-        if (userDoc.id !== uid) await deleteDoc(doc(db, 'users', userDoc.id)).catch(e => console.error('Error deleting old user doc on first access:', e));
-      } else {
-        const isRamon = email.toLowerCase().trim() === "ramon.souza@oeg.group";
-        await setDoc(doc(db, 'users', uid), {
-          name: isRamon ? "Ramon Souza" : email.split('@')[0],
-          email: email.toLowerCase().trim(),
-          role: 'Administrador',
-          status: 'Ativo',
-          uid: uid,
-          approvalLimit: 10000000,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }).catch(e => console.error('Error creating bootstrap user:', e));
+      // Clean up the placeholder doc if needed (doc ID was probably email or something else)
+      if (userDoc.id !== uid) {
+        await deleteDoc(doc(db, 'users', userDoc.id)).catch(e => console.error('Error deleting old user doc:', e));
       }
 
       addNotification('Conta Criada!', 'Seu primeiro acesso foi configurado com sucesso.', 'success');

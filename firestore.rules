@@ -99,221 +99,119 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isActive() {
       return isAuthenticated() && 
-        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo');
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserData().status == 'Ativo';
     }
 
-    function canAccess() {
-      return isAuthenticated() && isActive();
+    function hasRole(role) {
+      return isActive() && getUserData().role == role;
     }
 
-    function isBootstrapAdmin() {
-      return request.auth.token.email != null && 
-             (request.auth.token.email.lower() == "ramon.souza@oeg.group" || 
-              request.auth.token.email.lower() == "ramonsancho@gmail.com");
+    function isAdmin() { return hasRole('Administrador'); }
+    function isComprador() { return hasRole('Comprador'); }
+    function isAprovador() { return hasRole('Aprovador'); }
+
+    // Validation Helpers
+    function isIncoming(field, type) {
+      return request.resource.data[field] is type;
     }
 
-    function isAdmin() {
-      return isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador' &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Ativo') ||
-        isBootstrapAdmin()
-      );
-    }
-
-    function isRequisitante() {
-      return isAuthenticated() && (
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Requisitante'
-      );
-    }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-
-    function isValidString(val, min, max) {
-      return val is string && val.size() >= min && val.size() <= max;
+    function affectedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
     }
 
     // ===============================================================
-    // Domain Validators
+    // Collection Rules
     // ===============================================================
 
-    function isValidSupplier(data) {
-      return hasRequiredFields(['name', 'document', 'email', 'families', 'createdAt']) &&
-             isValidString(data.name, 1, 100) &&
-             isValidString(data.document, 1, 20) &&
-             isValidEmail(data.email) &&
-             data.families is list &&
-             (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
-             (!('accuracy' in data) || (data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100)) &&
-             (!('isCritical' in data) || data.isCritical is bool) &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidRFQ(data) {
-      return hasRequiredFields(['number', 'title', 'status', 'items', 'createdAt']) &&
-             data.number is int &&
-             isValidString(data.title, 1, 100) &&
-             ['draft', 'sent', 'closed'].hasAny([data.status]) &&
-             data.items is list &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidPO(data) {
-      return hasRequiredFields(['number', 'supplierId', 'supplierName', 'status', 'totalAmount', 'receivedAmount', 'items', 'createdAt']) &&
-             data.number is int &&
-             data.supplierId is string &&
-             ['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled'].hasAny([data.status]) &&
-             data.totalAmount is number && data.totalAmount >= 0 &&
-             (!('originalAmount' in data) || (data.originalAmount is number && data.originalAmount >= 0)) &&
-             data.receivedAmount is number && data.receivedAmount >= 0 &&
-             data.items is list &&
-             (!('receipts' in data) || data.receipts is list) &&
-             (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
-             (!('hasRNC' in data) || data.hasRNC is bool) &&
-             (!('completedAt' in data) || data.completedAt is timestamp) &&
-             (!('approvedAt' in data) || data.approvedAt is timestamp) &&
-             (!('approvedBy' in data) || data.approvedBy is string) &&
-             (!('approvedByName' in data) || data.approvedByName is string) &&
-             (!('createdBy' in data) || data.createdBy is string) &&
-             (!('createdByName' in data) || data.createdByName is string) &&
-             (!('family' in data) || data.family is string) &&
-             (!('revision' in data) || data.revision is int) &&
-             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidAuditLog(data) {
-      return hasRequiredFields(['userId', 'userEmail', 'action', 'entity', 'entityId', 'timestamp']) &&
-             data.userId == request.auth.uid &&
-             data.userEmail == request.auth.token.email &&
-             data.timestamp is timestamp;
-    }
-
-    function isValidNotification(data) {
-      return hasRequiredFields(['userId', 'title', 'message', 'type', 'read', 'timestamp']) &&
-             data.userId == request.auth.uid &&
-             isValidString(data.title, 1, 100) &&
-             isValidString(data.message, 1, 500) &&
-             ['info', 'success', 'warning', 'error'].hasAny([data.type]) &&
-             data.read is bool &&
-             data.timestamp is timestamp;
-    }
-
-    function isValidContract(data) {
-      return hasRequiredFields(['supplierId', 'supplierName', 'startDate', 'endDate', 'status', 'createdAt']) &&
-             data.supplierId is string &&
-             data.supplierName is string &&
-             data.startDate is string &&
-             data.endDate is string &&
-             ['active', 'expired', 'terminated'].hasAny([data.status]) &&
-             (!('lastAdjustmentDate' in data) || data.lastAdjustmentDate is string) &&
-             (!('lastAdjustmentPercentage' in data) || data.lastAdjustmentPercentage is number) &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidProposal(data) {
-      return hasRequiredFields(['rfqId', 'supplierId', 'supplierName', 'totalValue', 'deliveryDate', 'status', 'items', 'createdAt']) &&
-             data.rfqId is string &&
-             data.supplierId is string &&
-             data.supplierName is string &&
-             data.totalValue is number && data.totalValue >= 0 &&
-             data.deliveryDate is string &&
-             ['pending', 'accepted', 'rejected'].hasAny([data.status]) &&
-             data.items is list &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidUser(data) {
-      return hasRequiredFields(['name', 'email', 'role', 'status', 'createdAt']) &&
-             isValidString(data.name, 1, 100) &&
-             isValidEmail(data.email) &&
-             ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'].hasAny([data.role]) &&
-             ['Ativo', 'Inativo'].hasAny([data.status]) &&
-             (!('approvalLimit' in data) || data.approvalLimit is number) &&
-             data.createdAt is timestamp;
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
+    // User management: 
+    // - Only Admins can list all users.
+    // - Individual users can only read their own document.
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAdmin() && isValidUser(request.resource.data);
-      allow update: if (isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.email == resource.data.email && request.resource.data.role == resource.data.role)) && isValidUser(request.resource.data);
-      allow delete: if isAdmin();
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      
+      // All writes to users should ideally go through backend, but we allow admin to edit in UI
+      // No self-promotion or self-activation
+      allow create: if isAdmin();
+      allow update: if (isAdmin() && request.resource.data.keys().hasOnly(['name', 'email', 'role', 'status', 'approvalLimit', 'updatedAt', 'createdBy', 'createdAt', 'deactivatedAt'])) ||
+                    (isAuthenticated() && request.auth.uid == userId && affectedKeys().hasOnly(['name', 'updatedAt']));
+      allow delete: if false; // Prefer deactivation
     }
 
+    // Suppliers: strictly buyers/admins
     match /suppliers/{supplierId} {
-      allow read: if canAccess();
-      allow create: if canAccess() && !isRequisitante() && isValidSupplier(request.resource.data);
-      allow update: if canAccess() && !isRequisitante() && isValidSupplier(request.resource.data);
+      allow read: if isActive();
+      allow create, update: if (isAdmin() || isComprador()) && 
+                            request.resource.data.keys().hasOnly(['id', 'name', 'document', 'address', 'contactName', 'email', 'phone', 'families', 'paymentTerms', 'rating', 'accuracy', 'isCritical', 'notes', 'createdAt', 'updatedAt']);
       allow delete: if isAdmin();
     }
 
+    // RFQs
     match /rfqs/{rfqId} {
-      allow read: if canAccess();
-      allow create: if canAccess() && isValidRFQ(request.resource.data);
-      allow update: if canAccess() && !isRequisitante() && isValidRFQ(request.resource.data);
-      allow delete: if canAccess() && !isRequisitante();
-    }
-
-    match /purchase-orders/{poId} {
-      allow read: if canAccess();
-      allow create: if canAccess() && !isRequisitante() && isValidPO(request.resource.data);
-      allow update: if canAccess() && !isRequisitante() && isValidPO(request.resource.data);
+      allow read: if isActive();
+      allow create: if (isAdmin() || isComprador()) && 
+                    request.resource.data.keys().hasOnly(['id', 'number', 'title', 'status', 'desiredDate', 'items', 'createdAt', 'updatedAt']);
+      allow update: if (isAdmin() || isComprador()) && 
+                    !affectedKeys().hasAny(['number']) &&
+                    request.resource.data.keys().hasOnly(['id', 'number', 'title', 'status', 'desiredDate', 'items', 'createdAt', 'updatedAt']);
       allow delete: if isAdmin();
     }
 
-    match /families/{familyId} {
-      allow read: if canAccess();
-      allow create: if canAccess() && !isRequisitante() && request.resource.data.keys().hasAll(['name', 'createdAt']) && request.resource.data.name is string;
-      allow update, delete: if isAdmin();
+    // Purchase Orders: Very Sensitive
+    match /purchase-orders/{poId} {
+      allow read: if isActive();
+      
+      // Create: Buyers/Admins only
+      allow create: if (isAdmin() || isComprador()) && 
+                    request.resource.data.keys().hasOnly(['id', 'number', 'supplierId', 'supplierName', 'status', 'totalAmount', 'receivedAmount', 'items', 'createdAt', 'updatedAt', 'originalAmount']);
+      
+      // Update: 
+      // 1. Buyers can update non-status/non-approval fields when draft
+      // 2. Admins can update
+      // 3. Status/Approval fields are BLOCKED for all - Must use Backend API
+      allow update: if (isAdmin() || isComprador()) && 
+                    !affectedKeys().hasAny(['status', 'approvedBy', 'approvedByName', 'approvedAt', 'number']) &&
+                    request.resource.data.keys().hasOnly(['id', 'number', 'supplierId', 'supplierName', 'status', 'totalAmount', 'receivedAmount', 'items', 'createdAt', 'updatedAt', 'originalAmount', 'receivedAmount', 'receipts', 'rating', 'hasRNC', 'completedAt', 'approvedAt', 'approvedBy', 'approvedByName']);
+      
+      allow delete: if isAdmin() && resource.data.status == 'draft';
     }
 
+    // Audit Logs: BACKEND ONLY (write)
     match /audit-logs/{logId} {
       allow read: if isAdmin();
-      allow create: if canAccess() && isValidAuditLog(request.resource.data);
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow write: if false; 
+    }
+
+    // Standard Staff collections
+    match /families/{familyId} {
+      allow read: if isActive();
+      allow write: if isAdmin() || isComprador();
     }
 
     match /contracts/{contractId} {
-      allow read: if canAccess();
-      allow create: if canAccess() && !isRequisitante() && isValidContract(request.resource.data);
-      allow update: if canAccess() && !isRequisitante() && isValidContract(request.resource.data);
-      allow delete: if isAdmin();
+      allow read: if isActive();
+      allow write: if isAdmin() || isComprador();
     }
 
     match /proposals/{proposalId} {
-      allow read: if canAccess();
-      allow create: if canAccess() && !isRequisitante() && isValidProposal(request.resource.data);
-      allow update: if canAccess() && !isRequisitante() && isValidProposal(request.resource.data);
-      allow delete: if isAdmin();
+      allow read: if isActive();
+      allow write: if isAdmin() || isComprador();
     }
 
     match /notifications/{notificationId} {
-      allow read: if canAccess() && resource.data.userId == request.auth.uid;
-      allow create: if canAccess() && isValidNotification(request.resource.data);
-      allow update: if canAccess() && resource.data.userId == request.auth.uid && isValidNotification(request.resource.data);
-      allow delete: if canAccess() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isActive();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // Default deny
+    // Catch-all
     match /{document=**} {
       allow read, write: if false;
     }

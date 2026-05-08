@@ -22,7 +22,6 @@ import { useNotifications } from '../hooks/useNotifications';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { isBootstrapAdmin } from '../constants';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { User as UserType } from '../types';
@@ -48,29 +47,6 @@ export default function Layout() {
         const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            const userEmail = user.email?.toLowerCase().trim() || '';
-            
-            if (isBootstrapAdmin(userEmail)) {
-              let needsUpdate = false;
-              const updates: any = {};
-              
-              if (userData.role !== 'Administrador') {
-                updates.role = 'Administrador';
-                needsUpdate = true;
-              }
-              
-              if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
-                updates.name = "Ramon Souza";
-                needsUpdate = true;
-              }
-              
-              if (needsUpdate) {
-                setDoc(userRef, updates, { merge: true }).catch(e => {
-                  console.error('Error self-healing bootstrap admin:', e);
-                });
-              }
-            }
-            
             setUserProfile({ ...userData, id: docSnap.id } as UserType);
           }
         }, (error) => {

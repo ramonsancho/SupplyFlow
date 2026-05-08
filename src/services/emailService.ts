@@ -3,22 +3,25 @@ import { auth, getAuthToken } from '../firebase';
 export interface EmailPayload {
   to: string | string[];
   subject: string;
-  html: string;
+  templateName?: string;
+  context?: any;
+  html?: string;
   text?: string;
   fromName?: string;
 }
 
 /**
  * Custom Email Service to send emails via our backend.
- * Designed to be as simple to use as Firebase Auth's email functions.
+ * Uses secure templates on the server to prevent HTML injection from the client.
  */
 export const emailService = {
   sendCustomEmail: async (payload: EmailPayload) => {
     console.log('[EmailService] Enviando e-mail:', { 
       to: payload.to, 
       subject: payload.subject,
-      fromName: payload.fromName 
+      templateName: payload.templateName 
     });
+    
     const token = await getAuthToken();
     const response = await fetch('/api/send-email', {
       method: 'POST',
@@ -27,21 +30,20 @@ export const emailService = {
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        ...payload,
-        replyTo: auth.currentUser?.email,
+        to: payload.to,
+        subject: payload.subject,
+        templateName: payload.templateName,
+        context: payload.context || { html: payload.html },
       }),
     });
 
     if (!response.ok) {
       let errorMessage = 'Falha ao enviar e-mail.';
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
+      try {
         const errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
-      } else {
-        const text = await response.text();
-        console.error('Server error response:', text);
-        errorMessage = `Erro do servidor (${response.status}): ${response.statusText}`;
+      } catch (e) {
+        errorMessage = `Erro do servidor (${response.status})`;
       }
       throw new Error(errorMessage);
     }

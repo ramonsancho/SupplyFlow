@@ -1,277 +1,201 @@
 import express from "express";
-import nodemailer from "nodemailer";
 import admin from "firebase-admin";
-import fs from "fs";
-import path from "path";
 import "dotenv/config";
-import helmet from "helmet";
-import { rateLimit } from "express-rate-limit";
+import { authenticate, requireAdmin, requireRole } from "./middleware/auth";
+import { sendSecureEmail } from "./services/emailService";
 
 const app = express();
-
-// Security Headers - Temporarily disabled to troubleshoot Vite integration
-// app.use(helmet({
-//   contentSecurityPolicy: false, // Vite handles CSP in dev
-// }));
-
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: "Muitas requisições, tente novamente mais tarde." }
-});
-app.use("/api/", limiter);
+const apiRouter = express.Router();
 
 app.use(express.json());
 
-// Initialize Firebase Admin
-try {
-  if (admin.apps.length === 0) {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-        
-        // Fix for private key newlines in environment variables
-        if (serviceAccount.private_key) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-        }
-
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
-        });
-        console.log("[Firebase Admin] Inicializado com Service Account Key do ambiente.");
-      } catch (parseError) {
-        console.error("[Firebase Admin] Erro ao processar FIREBASE_SERVICE_ACCOUNT_KEY:", parseError);
-        throw parseError;
-      }
-    } else {
-      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-        admin.initializeApp({
-          projectId: config.projectId,
-        });
-        console.log("[Firebase Admin] Inicializado via arquivo de configuração.");
-      } else {
-        console.warn("[Firebase Admin] Nenhuma configuração encontrada (env ou arquivo).");
-      }
-    }
-  }
-} catch (error) {
-  console.error("[Firebase Admin] Erro crítico na inicialização:", error);
-}
-
-// Logger de requisições global
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
-
-// Global error handlers for Node.js
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('[Server] Uncaught Exception:', error);
-});
-
-// Global error handlers for Node.js
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('[Server] Uncaught Exception:', error);
-});
-
-// Middlewares de Segurança
-const authenticate = async (req: any, res: any, next: any) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.warn(`[Auth] Tentativa de acesso sem token: ${req.method} ${req.path}`);
-    return res.status(401).json({ error: "Autenticação necessária." });
-  }
-
-  const idToken = authHeader.split("Bearer ")[1];
-  if (!idToken || idToken === "null") {
-    return res.status(401).json({ error: "Token ausente ou inválido." });
-  }
-
-  try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    req.user = decodedToken;
-    
-    // Check role in Firestore
-    const userDoc = await admin.firestore().collection("users").doc(decodedToken.uid).get();
-    req.userData = userDoc.exists ? userDoc.data() : null;
-    
-    const bootstrapAdmins = (process.env.BOOTSTRAP_ADMINS || "").split(",").map(e => e.trim().toLowerCase());
-    req.isAdmin = req.userData?.role === "Administrador" || 
-                  (decodedToken.email && bootstrapAdmins.includes(decodedToken.email.toLowerCase()));
-    
-    next();
-  } catch (error) {
-    console.error("[Auth] Token inválido:", error);
-    res.status(401).json({ error: "Sessão inválida ou expirada." });
-  }
-};
-
-const requireAdmin = (req: any, res: any, next: any) => {
-  if (!req.isAdmin) {
-    return res.status(403).json({ error: "Acesso restrito a administradores." });
-  }
-  next();
-};
-
-// Rotas de API
-const apiRouter = express.Router();
-
+// 1. Health check
 apiRouter.get("/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    mode: process.env.NODE_ENV || 'development',
-    firebaseAdmin: admin.apps.length > 0 ? "initialized" : "not_initialized",
-    smtpStatus: process.env.SMTP_HOST ? "configured" : "missing",
-    time: new Date().toISOString()
-  });
+  res.json({ status: "ok", version: "2.4-professional", auth: admin.apps.length > 0 });
 });
 
-apiRouter.post("/send-email", authenticate, async (req, res) => {
-  const { to, subject, html, text, replyTo, fromName } = req.body;
-  console.log(`[Email] Tentativa de envio para: ${to}`);
-
-  if (!to || (Array.isArray(to) && to.length === 0)) {
-    return res.status(400).json({ error: "Nenhum destinatário informado." });
-  }
-
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    console.error("[Email] Configuração SMTP incompleta no ambiente");
-    return res.status(500).json({ 
-      error: "Configuração de e-mail (SMTP) não encontrada no servidor. Verifique as variáveis de ambiente.",
-      details: { host: !!host, user: !!user, pass: !!pass }
-    });
-  }
-
-  const transporter = nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.SMTP_PORT || "587"),
-    secure: process.env.SMTP_PORT === "465",
-    auth: { user, pass },
-  });
-
+// 1.1 Sync/Bootstrap Auth
+apiRouter.post("/auth/sync", authenticate, async (req: any, res) => {
   try {
-    const from = `"${fromName || 'SupplyFlow'}" <${process.env.SMTP_FROM || user}>`;
+    const userRef = admin.firestore().collection("users").doc(req.user.uid);
+    const userSnap = await userRef.get();
     
-    if (Array.isArray(to)) {
-      console.log(`[Email] Enviando ${to.length} e-mails individuais para: ${to.join(', ')}`);
-      
-      const results = [];
-      for (const recipient of to) {
-        try {
-          const info = await transporter.sendMail({
-            from,
-            to: recipient,
-            subject,
-            html,
-            text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
-            replyTo,
-          });
-          results.push({ recipient, success: true, messageId: info.messageId });
-          console.log(`[Email] Sucesso para: ${recipient} (MessageID: ${info.messageId})`);
-        } catch (err) {
-          console.error(`[Email] Falha para: ${recipient}`, err);
-          results.push({ recipient, success: false, error: err instanceof Error ? err.message : String(err) });
-        }
-      }
-      
-      const successCount = results.filter(r => r.success).length;
-      console.log(`[Email] Concluído. Sucesso: ${successCount}/${to.length}`);
-      
-      if (successCount === 0 && to.length > 0) {
-        return res.status(500).json({ 
-          error: "Falha ao enviar todos os e-mails.",
-          details: results
-        });
-      }
-      
-      return res.json({ success: true, details: results });
-    } else {
-      // Envio único para um único destinatário
-      const info = await transporter.sendMail({
-        from,
-        to,
-        subject,
-        html,
-        text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
-        replyTo,
+    if (!userSnap.exists && req.isAdmin) {
+      // Auto-create bootstrap admin
+      await userRef.set({
+        name: req.user.name || req.user.email.split('@')[0],
+        email: req.user.email,
+        role: 'Administrador',
+        status: 'Ativo',
+        uid: req.user.uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
-      console.log(`[Email] Sucesso! E-mail enviado para: ${to} (MessageID: ${info.messageId})`);
+      return res.json({ success: true, created: true });
     }
     
-    res.json({ success: true });
-  } catch (error) {
-    console.error("[Email] Erro no transporte SMTP:", error);
-    res.status(500).json({ 
-      error: "Falha ao enviar e-mail via SMTP.",
-      message: error instanceof Error ? error.message : String(error)
-    });
+    res.json({ success: true, created: false });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-apiRouter.post("/delete-user", authenticate, requireAdmin, async (req, res) => {
-  const { uid, email } = req.body;
+// 2. User Management (Secure)
+apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res) => {
+  const { email, password, name, role } = req.body;
   
-  if (!uid && !email) {
-    return res.status(400).json({ error: "UID ou Email não informado." });
+  if (!email || !name || !role) {
+    return res.status(400).json({ error: "Campos obrigatórios ausentes." });
   }
 
-  if (admin.apps.length === 0) {
-    return res.status(500).json({ 
-      error: "Firebase Admin não inicializado.", 
-      details: "A variável FIREBASE_SERVICE_ACCOUNT_KEY pode estar ausente ou malformada no servidor." 
-    });
+  const allowedRoles = ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'];
+  if (!allowedRoles.includes(role)) {
+    return res.status(400).json({ error: "Papel de usuário inválido." });
   }
 
   try {
-    if (uid) {
-      await admin.auth().deleteUser(uid);
-      console.log(`[Auth] Usuário deletado por UID: ${uid}`);
-    } else if (email) {
-      try {
-        const userRecord = await admin.auth().getUserByEmail(email);
-        await admin.auth().deleteUser(userRecord.uid);
-        console.log(`[Auth] Usuário deletado por Email: ${email} (UID: ${userRecord.uid})`);
-      } catch (getUserError: any) {
-        if (getUserError.code === 'auth/user-not-found') {
-          console.log(`[Auth] Usuário com email ${email} não encontrado no Auth. Nada para deletar.`);
-          return res.json({ success: true, message: "Usuário não encontrado no Auth." });
-        }
-        throw getUserError;
-      }
-    }
+    const userRecord = await admin.auth().createUser({
+      email,
+      password: password || Math.random().toString(36).slice(-10) + "!", // Random password if none provided
+      displayName: name,
+    });
+
+    await admin.firestore().collection("users").doc(userRecord.uid).set({
+      name,
+      email,
+      role,
+      status: 'Ativo',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: req.user.uid
+    });
+
+    // Auditoria
+    await admin.firestore().collection("audit-logs").add({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      action: 'USER_CREATE',
+      entity: 'users',
+      entityId: userRecord.uid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      details: { email, role }
+    });
+
+    res.json({ success: true, uid: userRecord.uid });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res) => {
+  const { uid } = req.body;
+  
+  if (uid === req.user.uid) {
+    return res.status(400).json({ error: "Você não pode deletar sua própria conta." });
+  }
+
+  try {
+    await admin.auth().deleteUser(uid);
+    await admin.firestore().collection("users").doc(uid).update({ 
+      status: 'Inativo',
+      deactivatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Auditoria
+    await admin.firestore().collection("audit-logs").add({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      action: 'USER_DELETE',
+      entity: 'users',
+      entityId: uid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
     res.json({ success: true });
   } catch (error: any) {
-    console.error(`[Auth] Erro ao deletar usuário (UID: ${uid}, Email: ${email}):`, error);
-    
-    res.status(500).json({ 
-      error: "Falha ao deletar usuário do Firebase Authentication.",
-      message: error.message,
-      code: error.code
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Registrar rotas de API
-app.use("/api", apiRouter);
+// 3. Purchase Order Approval (Secure Workflow)
+apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprovador']), async (req: any, res) => {
+  const { poId } = req.body;
+  if (!poId) return res.status(400).json({ error: "ID da OC é obrigatório." });
 
-// Catch-all para rotas /api não encontradas
-app.all("/api/*", (req, res) => {
-  res.status(404).json({ error: `Rota de API não encontrada: ${req.path}` });
+  try {
+    const poRef = admin.firestore().collection("purchase-orders").doc(poId);
+    
+    // Process in a transaction to ensure no double-approval or race condition
+    const result = await admin.firestore().runTransaction(async (transaction) => {
+      const poDoc = await transaction.get(poRef);
+      if (!poDoc.exists) throw new Error("OC não encontrada.");
+      
+      const poData = poDoc.data()!;
+      if (poData.status === 'approved') throw new Error("OC já está aprovada.");
+
+      // Validate approval limit for non-admins
+      if (req.userData.role === 'Aprovador') {
+        const limit = req.userData.approvalLimit || 0;
+        if ((poData.totalAmount || 0) > limit) {
+          throw new Error(`Limite insuficiente para aprovação. Seu limite é R$ ${limit}`);
+        }
+      }
+
+      transaction.update(poRef, {
+        status: 'approved',
+        approvedBy: req.user.uid,
+        approvedByName: req.userData.name,
+        approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Auditoria Automática (dentro da transação)
+      const auditRef = admin.firestore().collection("audit-logs").doc();
+      transaction.set(auditRef, {
+        userId: req.user.uid,
+        userEmail: req.user.email,
+        action: 'APPROVE_PO',
+        entity: 'purchase-orders',
+        entityId: poId,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        details: { amount: poData.totalAmount, number: poData.number }
+      });
+
+      return { success: true };
+    });
+
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Secure Email API
+apiRouter.post("/send-email", authenticate, requireRole(['Administrador', 'Comprador']), async (req: any, res) => {
+  const { to, subject, templateName, context } = req.body;
+  
+  if (!to || !templateName) {
+    return res.status(400).json({ error: "Destinatário e template são obrigatórios." });
+  }
+
+  try {
+    const info = await sendSecureEmail({
+      to,
+      subject,
+      templateName,
+      context,
+      userId: req.user.uid
+    });
+    res.json({ success: true, messageId: info.messageId });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.use("/", apiRouter);
+
+// Catch-all para rotas não encontradas
+app.all("*", (req, res) => {
+  res.status(404).json({ error: `Rota não encontrada: ${req.path}` });
 });
 
 export default app;
