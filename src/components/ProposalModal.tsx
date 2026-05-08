@@ -11,6 +11,7 @@ const proposalSchema = z.object({
   supplierId: z.string().min(1, 'Selecione um fornecedor'),
   deliveryDate: z.string().min(1, 'Data de entrega obrigatória'),
   freightValue: z.number().min(0, 'Frete deve ser positivo').optional(),
+  taxValue: z.number().min(0, 'Imposto deve ser positivo').optional(),
   discountValue: z.number().min(0, 'Desconto deve ser positivo').optional(),
   totalValue: z.number().optional(),
   items: z.array(z.object({
@@ -41,6 +42,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
       supplierId: '',
       deliveryDate: '',
       freightValue: 0,
+      taxValue: 0,
       discountValue: 0,
       items: (rfq.items || []).map(item => ({
         id: item.id,
@@ -64,6 +66,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
         supplierId: '',
         deliveryDate: '',
         freightValue: 0,
+        taxValue: 0,
         discountValue: 0,
         items: (rfq.items || []).map(item => ({
           id: item.id,
@@ -108,7 +111,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
     setValidationError(null);
     // Calculate total value to include in the payload
     const itemsTotal = data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-    const totalValue = itemsTotal + (data.freightValue || 0) - (data.discountValue || 0);
+    const totalValue = itemsTotal + (data.freightValue || 0) + (data.taxValue || 0) - (data.discountValue || 0);
 
     // Clean up undefined values (like id in items) to avoid Firestore errors
     const cleanedItems = data.items.map(item => {
@@ -129,9 +132,10 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
 
   const items = watch('items');
   const freightValue = watch('freightValue') || 0;
+  const taxValue = watch('taxValue') || 0;
   const discountValue = watch('discountValue') || 0;
   const itemsTotal = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-  const totalValue = itemsTotal + freightValue - discountValue;
+  const totalValue = itemsTotal + freightValue + taxValue - discountValue;
 
   if (!isOpen) return null;
 
@@ -186,13 +190,22 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
 
             <div className="space-y-4">
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Informações Adicionais</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Frete (R$)</label>
                   <input 
                     type="number"
                     step="0.01"
                     {...register('freightValue', { valueAsNumber: true })}
+                    className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Imposto (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    {...register('taxValue', { valueAsNumber: true })}
                     className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
                   />
                 </div>

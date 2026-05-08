@@ -266,10 +266,13 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-[#141414]">R$ {formatCurrency(proposal.totalValue)}</p>
-                          {(proposal.freightValue || proposal.discountValue) ? (
+                          {(proposal.freightValue || proposal.taxValue || proposal.discountValue) ? (
                             <div className="flex flex-col items-end gap-0.5 mt-1">
                               {proposal.freightValue! > 0 && (
                                 <p className="text-[9px] text-slate-400 uppercase tracking-tighter">Frete: R$ {formatCurrency(proposal.freightValue!)}</p>
+                              )}
+                              {proposal.taxValue! > 0 && (
+                                <p className="text-[9px] text-slate-400 uppercase tracking-tighter">Imposto: R$ {formatCurrency(proposal.taxValue!)}</p>
                               )}
                               {proposal.discountValue! > 0 && (
                                 <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter">Desconto: - R$ {formatCurrency(proposal.discountValue!)}</p>

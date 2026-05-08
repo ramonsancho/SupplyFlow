@@ -40,6 +40,7 @@ export type Proposal = {
   supplierName: string;
   totalValue: number;
   freightValue?: number;
+  taxValue?: number;
   discountValue?: number;
   deliveryDate: string;
   status: 'pending' | 'accepted' | 'rejected';
