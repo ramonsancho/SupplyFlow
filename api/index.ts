@@ -1,5 +1,6 @@
 import express from "express";
 import admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import "dotenv/config";
 import { authenticate, requireAdmin, requireRole } from "./middleware/auth";
 import { sendSecureEmail } from "./services/emailService";
@@ -12,7 +13,12 @@ app.use(express.json());
 
 // 1. Health check
 apiRouter.get("/health", (req, res) => {
-  res.json({ status: "ok", version: "3.0-enterprise", auth: admin.apps.length > 0 });
+  res.json({ 
+    status: "ok", 
+    version: "3.1-enterprise", 
+    auth: admin.apps.length > 0,
+    db: !!getDb()
+  });
 });
 
 // 1.1 Sync/Bootstrap Auth
@@ -23,20 +29,25 @@ apiRouter.post("/auth/sync", authenticate, async (req: any, res) => {
     
     if (!userSnap.exists && req.isAdmin) {
       // Auto-create bootstrap admin
+      const email = req.user.email || "";
+      const name = req.user.name || (email ? email.split('@')[0] : "Admin");
+      
       await userRef.set({
-        name: req.user.name || req.user.email.split('@')[0],
-        email: req.user.email,
+        name,
+        email,
         role: 'Administrador',
         status: 'Ativo',
         uid: req.user.uid,
-        createdAt: admin.firestore.Timestamp.now(),
-        updatedAt: admin.firestore.Timestamp.now()
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       });
+      console.log(`[API] Bootstrap admin created for ${email}`);
       return res.json({ success: true, created: true });
     }
     
     res.json({ success: true, created: false });
   } catch (error: any) {
+    console.error("[API] Auth Sync Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -67,7 +78,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
       role,
       status: 'Ativo',
       approvalLimit: approvalLimit || 0,
-      createdAt: admin.firestore.Timestamp.now(),
+      createdAt: Timestamp.now(),
       createdBy: req.user.uid
     });
 
@@ -78,7 +89,7 @@ apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res
       action: 'USER_CREATE',
       entity: 'users',
       entityId: userRecord.uid,
-      timestamp: admin.firestore.Timestamp.now(),
+      timestamp: Timestamp.now(),
       details: { email, role }
     });
 
@@ -99,7 +110,7 @@ apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res
     await admin.auth().deleteUser(uid);
     await getDb().collection("users").doc(uid).update({ 
       status: 'Inativo',
-      deactivatedAt: admin.firestore.Timestamp.now()
+      deactivatedAt: Timestamp.now()
     });
 
     // Auditoria
@@ -109,7 +120,7 @@ apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res
       action: 'USER_DELETE',
       entity: 'users',
       entityId: uid,
-      timestamp: admin.firestore.Timestamp.now()
+      timestamp: Timestamp.now()
     });
 
     res.json({ success: true });
@@ -137,7 +148,9 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
       const poDoc = await transaction.get(poRef);
       if (!poDoc.exists) throw new Error("OC não encontrada.");
       
-      const poData = poDoc.data()!;
+      const poData = poDoc.data();
+      if (!poData) throw new Error("A OC existe mas os dados estão vazios.");
+
       console.log(`[API] PO Data status: ${poData.status}`);
       if (poData.status === 'approved') throw new Error("OC já está aprovada.");
 
@@ -152,7 +165,7 @@ apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprov
         }
       }
 
-      const now = admin.firestore.Timestamp.now();
+      const now = Timestamp.now();
       
       transaction.update(poRef, {
         status: 'approved',

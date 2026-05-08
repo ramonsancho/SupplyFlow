@@ -4,25 +4,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin globally at the top
-try {
-  if (!admin.apps.length) {
-    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(configPath)) {
-      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-      admin.initializeApp({
-        projectId: firebaseConfig.projectId,
-      });
-      console.log(`[Server] Firebase Admin initialized.`);
-    }
-  }
-} catch (err) {
-  console.error("[Server] Firebase Admin Init Error:", err);
-}
-
-// Now import the API
+import "./api/lib/firebase"; // Ensure Firebase is initialized
 import api from "./api/index";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,9 +15,13 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Simple Request Logging
+  // Enhanced Request Logging
   app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} ${res.statusCode} - ${duration}ms`);
+    });
     next();
   });
 
