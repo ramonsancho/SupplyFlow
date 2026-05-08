@@ -1,243 +1,277 @@
 import express from "express";
+import nodemailer from "nodemailer";
 import admin from "firebase-admin";
-import { Timestamp } from "firebase-admin/firestore";
+import fs from "fs";
+import path from "path";
 import "dotenv/config";
-import { authenticate, requireAdmin, requireRole } from "./middleware/auth";
-import { sendSecureEmail } from "./services/emailService";
-import { getDb } from "./lib/firebase";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 
 const app = express();
-const apiRouter = express.Router();
+
+// Security Headers - Temporarily disabled to troubleshoot Vite integration
+// app.use(helmet({
+//   contentSecurityPolicy: false, // Vite handles CSP in dev
+// }));
+
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: "Muitas requisições, tente novamente mais tarde." }
+});
+app.use("/api/", limiter);
 
 app.use(express.json());
 
-// 1. Health check
+// Initialize Firebase Admin
+try {
+  if (admin.apps.length === 0) {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        
+        // Fix for private key newlines in environment variables
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
+
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+        console.log("[Firebase Admin] Inicializado com Service Account Key do ambiente.");
+      } catch (parseError) {
+        console.error("[Firebase Admin] Erro ao processar FIREBASE_SERVICE_ACCOUNT_KEY:", parseError);
+        throw parseError;
+      }
+    } else {
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        admin.initializeApp({
+          projectId: config.projectId,
+        });
+        console.log("[Firebase Admin] Inicializado via arquivo de configuração.");
+      } else {
+        console.warn("[Firebase Admin] Nenhuma configuração encontrada (env ou arquivo).");
+      }
+    }
+  }
+} catch (error) {
+  console.error("[Firebase Admin] Erro crítico na inicialização:", error);
+}
+
+// Logger de requisições global
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+// Global error handlers for Node.js
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[Server] Uncaught Exception:', error);
+});
+
+// Global error handlers for Node.js
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[Server] Uncaught Exception:', error);
+});
+
+// Middlewares de Segurança
+const authenticate = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.warn(`[Auth] Tentativa de acesso sem token: ${req.method} ${req.path}`);
+    return res.status(401).json({ error: "Autenticação necessária." });
+  }
+
+  const idToken = authHeader.split("Bearer ")[1];
+  if (!idToken || idToken === "null") {
+    return res.status(401).json({ error: "Token ausente ou inválido." });
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = decodedToken;
+    
+    // Check role in Firestore
+    const userDoc = await admin.firestore().collection("users").doc(decodedToken.uid).get();
+    req.userData = userDoc.exists ? userDoc.data() : null;
+    
+    const bootstrapAdmins = (process.env.BOOTSTRAP_ADMINS || "").split(",").map(e => e.trim().toLowerCase());
+    req.isAdmin = req.userData?.role === "Administrador" || 
+                  (decodedToken.email && bootstrapAdmins.includes(decodedToken.email.toLowerCase()));
+    
+    next();
+  } catch (error) {
+    console.error("[Auth] Token inválido:", error);
+    res.status(401).json({ error: "Sessão inválida ou expirada." });
+  }
+};
+
+const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.isAdmin) {
+    return res.status(403).json({ error: "Acesso restrito a administradores." });
+  }
+  next();
+};
+
+// Rotas de API
+const apiRouter = express.Router();
+
 apiRouter.get("/health", (req, res) => {
   res.json({ 
     status: "ok", 
-    version: "3.1-enterprise", 
-    auth: admin.apps.length > 0,
-    db: !!getDb()
+    mode: process.env.NODE_ENV || 'development',
+    firebaseAdmin: admin.apps.length > 0 ? "initialized" : "not_initialized",
+    smtpStatus: process.env.SMTP_HOST ? "configured" : "missing",
+    time: new Date().toISOString()
   });
 });
 
-// 1.1 Sync/Bootstrap Auth
-apiRouter.post("/auth/sync", authenticate, async (req: any, res) => {
+apiRouter.post("/send-email", authenticate, async (req, res) => {
+  const { to, subject, html, text, replyTo, fromName } = req.body;
+  console.log(`[Email] Tentativa de envio para: ${to}`);
+
+  if (!to || (Array.isArray(to) && to.length === 0)) {
+    return res.status(400).json({ error: "Nenhum destinatário informado." });
+  }
+
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) {
+    console.error("[Email] Configuração SMTP incompleta no ambiente");
+    return res.status(500).json({ 
+      error: "Configuração de e-mail (SMTP) não encontrada no servidor. Verifique as variáveis de ambiente.",
+      details: { host: !!host, user: !!user, pass: !!pass }
+    });
+  }
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: process.env.SMTP_PORT === "465",
+    auth: { user, pass },
+  });
+
   try {
-    const userRef = getDb().collection("users").doc(req.user.uid);
-    const userSnap = await userRef.get();
+    const from = `"${fromName || 'SupplyFlow'}" <${process.env.SMTP_FROM || user}>`;
     
-    if (!userSnap.exists && req.isAdmin) {
-      // Auto-create bootstrap admin
-      const email = req.user.email || "";
-      const name = req.user.name || (email ? email.split('@')[0] : "Admin");
+    if (Array.isArray(to)) {
+      console.log(`[Email] Enviando ${to.length} e-mails individuais para: ${to.join(', ')}`);
       
-      await userRef.set({
-        name,
-        email,
-        role: 'Administrador',
-        status: 'Ativo',
-        uid: req.user.uid,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
-      console.log(`[API] Bootstrap admin created for ${email}`);
-      return res.json({ success: true, created: true });
-    }
-    
-    res.json({ success: true, created: false });
-  } catch (error: any) {
-    console.error("[API] Auth Sync Error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 2. User Management (Secure)
-apiRouter.post("/users/create", authenticate, requireAdmin, async (req: any, res) => {
-  const { email, password, name, role, approvalLimit } = req.body;
-  
-  if (!email || !name || !role) {
-    return res.status(400).json({ error: "Campos obrigatórios ausentes." });
-  }
-
-  const allowedRoles = ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'];
-  if (!allowedRoles.includes(role)) {
-    return res.status(400).json({ error: "Papel de usuário inválido." });
-  }
-
-  try {
-    const userRecord = await admin.auth().createUser({
-      email,
-      password: password || Math.random().toString(36).slice(-10) + "!", // Random password if none provided
-      displayName: name,
-    });
-
-    await getDb().collection("users").doc(userRecord.uid).set({
-      name,
-      email,
-      role,
-      status: 'Ativo',
-      approvalLimit: approvalLimit || 0,
-      createdAt: Timestamp.now(),
-      createdBy: req.user.uid
-    });
-
-    // Auditoria
-    await getDb().collection("audit-logs").add({
-      userId: req.user.uid,
-      userEmail: req.user.email,
-      action: 'USER_CREATE',
-      entity: 'users',
-      entityId: userRecord.uid,
-      timestamp: Timestamp.now(),
-      details: { email, role }
-    });
-
-    res.json({ success: true, uid: userRecord.uid });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-apiRouter.post("/users/delete", authenticate, requireAdmin, async (req: any, res) => {
-  const { uid } = req.body;
-  
-  if (uid === req.user.uid) {
-    return res.status(400).json({ error: "Você não pode deletar sua própria conta." });
-  }
-
-  try {
-    await admin.auth().deleteUser(uid);
-    await getDb().collection("users").doc(uid).update({ 
-      status: 'Inativo',
-      deactivatedAt: Timestamp.now()
-    });
-
-    // Auditoria
-    await getDb().collection("audit-logs").add({
-      userId: req.user.uid,
-      userEmail: req.user.email,
-      action: 'USER_DELETE',
-      entity: 'users',
-      entityId: uid,
-      timestamp: Timestamp.now()
-    });
-
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 3. Purchase Order Approval (Secure Workflow)
-apiRouter.post("/po/approve", authenticate, requireRole(['Administrador', 'Aprovador']), async (req: any, res) => {
-  const { poId } = req.body;
-  if (!poId) return res.status(400).json({ error: "ID da OC é obrigatório." });
-
-  try {
-    console.log(`[API] Approving PO ${poId} by ${req.user.uid} (${req.userData.role})`);
-    
-    const db = getDb();
-    const poRef = db.collection("purchase-orders").doc(poId);
-    
-    console.log(`[API] Starting transaction for PO ${poId}`);
-    
-    // Process in a transaction to ensure no double-approval or race condition
-    const result = await db.runTransaction(async (transaction) => {
-      console.log(`[API] Transaction running for PO ${poId}`);
-      const poDoc = await transaction.get(poRef);
-      if (!poDoc.exists) throw new Error("OC não encontrada.");
-      
-      const poData = poDoc.data();
-      if (!poData) throw new Error("A OC existe mas os dados estão vazios.");
-
-      console.log(`[API] PO Data status: ${poData.status}`);
-      if (poData.status === 'approved') throw new Error("OC já está aprovada.");
-
-      // Validate approval limit for non-admins
-      const userRole = req.userData?.role;
-      if (userRole === 'Aprovador') {
-        const limit = Number(req.userData.approvalLimit || 0);
-        const poTotal = Number(poData.totalAmount || 0);
-        console.log(`[API] Approver limit: ${limit}, PO total: ${poTotal}`);
-        if (poTotal > limit) {
-          throw new Error(`Limite insuficiente para aprovação. Seu limite é R$ ${limit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      const results = [];
+      for (const recipient of to) {
+        try {
+          const info = await transporter.sendMail({
+            from,
+            to: recipient,
+            subject,
+            html,
+            text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
+            replyTo,
+          });
+          results.push({ recipient, success: true, messageId: info.messageId });
+          console.log(`[Email] Sucesso para: ${recipient} (MessageID: ${info.messageId})`);
+        } catch (err) {
+          console.error(`[Email] Falha para: ${recipient}`, err);
+          results.push({ recipient, success: false, error: err instanceof Error ? err.message : String(err) });
         }
       }
-
-      const now = Timestamp.now();
       
-      transaction.update(poRef, {
-        status: 'approved',
-        approvedBy: req.user?.uid || 'unknown',
-        approvedByName: req.userData?.name || 'Unknown',
-        approvedAt: now,
-        updatedAt: now
+      const successCount = results.filter(r => r.success).length;
+      console.log(`[Email] Concluído. Sucesso: ${successCount}/${to.length}`);
+      
+      if (successCount === 0 && to.length > 0) {
+        return res.status(500).json({ 
+          error: "Falha ao enviar todos os e-mails.",
+          details: results
+        });
+      }
+      
+      return res.json({ success: true, details: results });
+    } else {
+      // Envio único para um único destinatário
+      const info = await transporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
+        replyTo,
       });
-
-      // Auditoria Automática (dentro da transação)
-      const auditRef = db.collection("audit-logs").doc();
-      transaction.set(auditRef, {
-        userId: req.user?.uid || 'unknown',
-        userEmail: req.user?.email || 'unknown',
-        action: 'APPROVE_PO',
-        entity: 'purchase-orders',
-        entityId: poId,
-        timestamp: now,
-        details: { 
-          amount: poData.totalAmount, 
-          number: poData.number,
-          role: userRole
-        }
-      });
-
-      return { success: true };
+      console.log(`[Email] Sucesso! E-mail enviado para: ${to} (MessageID: ${info.messageId})`);
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[Email] Erro no transporte SMTP:", error);
+    res.status(500).json({ 
+      error: "Falha ao enviar e-mail via SMTP.",
+      message: error instanceof Error ? error.message : String(error)
     });
-
-    console.log(`[API] PO ${poId} approved successfully`);
-    res.json(result);
-  } catch (error: any) {
-    console.error(`[API] PO Approve Error:`, error);
-    res.status(500).json({ error: error.message });
   }
 });
 
-// 4. Secure Email API
-apiRouter.post("/send-email", authenticate, requireRole(['Administrador', 'Comprador']), async (req: any, res) => {
-  const { to, subject, templateName, context } = req.body;
+apiRouter.post("/delete-user", authenticate, requireAdmin, async (req, res) => {
+  const { uid, email } = req.body;
   
-  if (!to || !templateName) {
-    return res.status(400).json({ error: "Destinatário e template são obrigatórios." });
+  if (!uid && !email) {
+    return res.status(400).json({ error: "UID ou Email não informado." });
+  }
+
+  if (admin.apps.length === 0) {
+    return res.status(500).json({ 
+      error: "Firebase Admin não inicializado.", 
+      details: "A variável FIREBASE_SERVICE_ACCOUNT_KEY pode estar ausente ou malformada no servidor." 
+    });
   }
 
   try {
-    const info = await sendSecureEmail({
-      to,
-      subject,
-      templateName,
-      context,
-      userId: req.user.uid
-    });
-    res.json({ success: true, messageId: info.messageId });
+    if (uid) {
+      await admin.auth().deleteUser(uid);
+      console.log(`[Auth] Usuário deletado por UID: ${uid}`);
+    } else if (email) {
+      try {
+        const userRecord = await admin.auth().getUserByEmail(email);
+        await admin.auth().deleteUser(userRecord.uid);
+        console.log(`[Auth] Usuário deletado por Email: ${email} (UID: ${userRecord.uid})`);
+      } catch (getUserError: any) {
+        if (getUserError.code === 'auth/user-not-found') {
+          console.log(`[Auth] Usuário com email ${email} não encontrado no Auth. Nada para deletar.`);
+          return res.json({ success: true, message: "Usuário não encontrado no Auth." });
+        }
+        throw getUserError;
+      }
+    }
+    res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(`[Auth] Erro ao deletar usuário (UID: ${uid}, Email: ${email}):`, error);
+    
+    res.status(500).json({ 
+      error: "Falha ao deletar usuário do Firebase Authentication.",
+      message: error.message,
+      code: error.code
+    });
   }
 });
 
-app.use("/", apiRouter);
+// Registrar rotas de API
+app.use("/api", apiRouter);
 
-// Catch-all para rotas não encontradas
-app.all("*", (req, res) => {
-  res.status(404).json({ error: `Rota não encontrada: ${req.path}` });
-});
-
-// Global Error Handler
-app.use((err: any, req: any, res: any, next: any) => {
-  console.error("[API Global Error]:", err);
-  res.status(err.status || 500).json({ 
-    error: err.message || "Erro interno do servidor",
-    path: req.path
-  });
+// Catch-all para rotas /api não encontradas
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `Rota de API não encontrada: ${req.path}` });
 });
 
 export default app;

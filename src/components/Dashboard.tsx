@@ -19,6 +19,7 @@ import { db, handleFirestoreError, OperationType, formatDate, formatCurrency } f
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { PurchaseOrder, RFQ, Supplier, Proposal, User, Contract } from '../types';
 import { auth } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion } from 'motion/react';
@@ -422,7 +423,7 @@ export default function Dashboard() {
   ];
 
   // Calculate Action Items (Inbox)
-  const isAdmin = currentUserProfile?.role === 'Administrador';
+  const isAdmin = currentUserProfile?.role === 'Administrador' || (auth.currentUser?.email && isBootstrapAdmin(auth.currentUser.email));
   const isApprover = isAdmin || currentUserProfile?.role === 'Aprovador';
 
   const inboxItems = [

@@ -1,11 +1,9 @@
-// System roles
-export type AppRole = 'Administrador' | 'Comprador' | 'Aprovador' | 'Requisitante';
+export const BOOTSTRAP_ADMIN_EMAILS = [
+  "ramon.souza@oeg.group",
+  "ramonsancho@gmail.com"
+];
 
-export const APP_ROLES: AppRole[] = ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'];
-
-export const ROLE_LABELS: Record<AppRole, string> = {
-  'Administrador': 'Administrador',
-  'Comprador': 'Comprador',
-  'Aprovador': 'Aprovador Financeiro',
-  'Requisitante': 'Requisitante'
+export const isBootstrapAdmin = (email: string | null | undefined) => {
+  if (!email) return false;
+  return BOOTSTRAP_ADMIN_EMAILS.includes(email.toLowerCase().trim());
 };

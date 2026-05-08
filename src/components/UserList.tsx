@@ -38,6 +38,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { initializeApp, getAuth as getAuthSecondary, createUserWithEmailAndPassword, firebaseConfig, getAuthToken } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { deleteApp, getApps } from 'firebase/app';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -67,6 +68,29 @@ export default function UserList() {
       unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
+          const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+          
+          if (isBootstrapAdmin(userEmail)) {
+            let needsUpdate = false;
+            const updates: any = {};
+            
+            if (userData.role !== 'Administrador') {
+              updates.role = 'Administrador';
+              needsUpdate = true;
+            }
+            
+            if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+              updates.name = "Ramon Souza";
+              needsUpdate = true;
+            }
+            
+            if (needsUpdate) {
+              setDoc(userRef, updates, { merge: true }).catch(e => {
+                console.error('Error self-healing bootstrap admin in UserList:', e);
+              });
+            }
+          }
+          
           setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
         }
       }, (error) => {
@@ -123,8 +147,6 @@ export default function UserList() {
 
   const handleSaveUser = async (data: any) => {
     try {
-      const token = await getAuthToken();
-      
       if (editingUser) {
         const userRef = doc(db, 'users', editingUser.id);
         await updateDoc(userRef, {
@@ -134,100 +156,118 @@ export default function UserList() {
         await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
         await addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
-        // 0. Verificar se já existe no Firestore localmente (opcional)
+        // 0. Verificar se já existe no Firestore
         const emailExists = users.some(u => u.email.toLowerCase() === data.email.toLowerCase());
         if (emailExists) {
           await addNotification('Erro', 'Este email já está cadastrado na lista de usuários.', 'error');
           return;
         }
 
-        // Use secure backend API to create user
-        const response = await fetch('/api/users/create', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            email: data.email,
-            password: Math.random().toString(36).slice(-8) + 'A1!', // Temporary random password
-            name: data.name,
-            role: data.role,
-            approvalLimit: data.approvalLimit || 0
-          })
+        // Apenas criamos o documento no Firestore. 
+        // O usuário criará sua conta de Autenticação através do "Primeiro Acesso" na tela de Login.
+        const docRef = await addDoc(collection(db, 'users'), {
+          ...data,
+          createdAt: serverTimestamp(),
+          status: data.status || 'Ativo'
         });
-
-        if (!response.ok) {
-          const text = await response.text();
-          let errorMessage = text || 'Erro ao criar usuário no servidor';
-          try {
-            const errData = JSON.parse(text);
-            errorMessage = errData.error || errorMessage;
-          } catch (e) {
-            // Keep text as errorMessage
-          }
-          throw new Error(errorMessage);
-        }
-
-        const responseData = await response.json();
-        const uid = responseData.uid;
         
-        // Enviar convite usando a nova API segura
+        // Opcional: Enviar um email de convite informando que ele pode fazer o primeiro acesso
         try {
-          await fetch('/api/send-email', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              to: data.email,
-              subject: 'Convite para o SupplyFlow',
-              templateName: 'user_welcome',
-              context: {
-                userName: data.name,
-                role: data.role
-              }
-            })
+          await emailService.sendCustomEmail({
+            to: data.email,
+            subject: 'Convite para o SupplyFlow',
+            fromName: 'SupplyFlow Team',
+            html: `
+              <div style="font-family: sans-serif; color: #141414; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E5E5; border-radius: 12px;">
+                <h2 style="color: #141414;">Bem-vindo ao SupplyFlow</h2>
+                <p>Olá <strong>${data.name}</strong>,</p>
+                <p>Você foi cadastrado no sistema SupplyFlow como <strong>${data.role}</strong>.</p>
+                <p>Para acessar o sistema pela primeira vez, siga os passos abaixo:</p>
+                <ol>
+                  <li>Acesse a página de login.</li>
+                  <li>Clique na aba <strong>"PRIMEIRO ACESSO"</strong>.</li>
+                  <li>Informe seu e-mail corporativo e defina sua senha pessoal.</li>
+                </ol>
+                <p>Se tiver dúvidas, entre em contato com o administrador.</p>
+                <hr style="border: none; border-top: 1px solid #E5E5E5; margin: 20px 0;" />
+                <p style="font-size: 12px; color: #8E9299;">SupplyFlow Management System</p>
+              </div>
+            `
           });
         } catch (emailErr) {
-          console.warn('Não foi possível enviar o e-mail de convite.', emailErr);
+          console.warn('Não foi possível enviar o e-mail de convite, mas o usuário foi criado no banco.', emailErr);
         }
         
-        await addLog('Cadastrou Usuário', 'User', uid, auth.currentUser?.email || 'Unknown');
-        await addNotification('Usuário Cadastrado', `${data.name} foi adicionado. Ele deve realizar o primeiro acesso para definir sua senha.`, 'success');
+        await addLog('Cadastrou Usuário', 'User', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addNotification('Usuário Cadastrado', `${data.name} foi adicionado. Ele deve realizar o "Primeiro Acesso" para definir sua senha.`, 'success');
       }
       setIsModalOpen(false);
       setEditingUser(undefined);
     } catch (error: any) {
       console.error('User save error:', error);
-      await addNotification('Erro', error.message || 'Não foi possível salvar o usuário.', 'error');
+      let message = 'Não foi possível salvar o usuário.';
+      
+      if (error.code === 'permission-denied') {
+        message = 'Permissão negada. Verifique se você tem autorização para esta ação.';
+      } else if (error.message) {
+        // Tentamos extrair uma mensagem mais amigável do erro JSON se for o caso
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed.error) message = `Erro no banco: ${parsed.error}`;
+        } catch (e) {
+          message = error.message;
+        }
+      }
+      
+      await addNotification('Erro', message, 'error');
+      
+      try {
+        handleFirestoreError(error, editingUser ? OperationType.UPDATE : OperationType.CREATE, 'users');
+      } catch (e) {
+        // Já notificamos o usuário acima
+      }
     }
   };
 
   const handleDeleteUser = async (id: string, name: string, email: string) => {
     try {
-      const token = await getAuthToken();
-      // Use secure backend API to delete user
-      const response = await fetch('/api/users/delete', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ uid: id })
-      });
+      // 1. Deletar do Firebase Authentication via API
+      try {
+        const token = await getAuthToken();
+        const response = await fetch('/api/delete-user', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ uid: id, email: email })
+        });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Erro ao deletar usuário no servidor');
+        if (!response.ok) {
+          let errorMsg = 'Erro desconhecido';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorData.message || response.statusText;
+          } catch (e) {
+            errorMsg = response.statusText;
+          }
+          console.warn('Erro ao deletar do Auth:', errorMsg);
+        }
+      } catch (e) {
+        console.error('Falha na requisição de deleção do Auth:', e);
       }
+
+      // 2. Deletar do Firestore
+      await deleteDoc(doc(db, 'users', id));
       
       await addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
       await addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
-    } catch (error: any) {
-      console.error('User delete error:', error);
-      await addNotification('Erro', error.message || 'Não foi possível excluir o usuário.', 'error');
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      } catch (e) {
+        console.error('User delete error:', e);
+      }
     }
   };
 

@@ -34,7 +34,8 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
-import { db, auth, handleFirestoreError, OperationType, formatDate, formatCurrency, getAuthToken } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, formatDate, formatCurrency } from '../firebase';
+import { isBootstrapAdmin } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -109,6 +110,30 @@ export default function OCList() {
       const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
+          const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+          
+          // Self-healing for bootstrap admins
+          if (isBootstrapAdmin(userEmail)) {
+            let needsUpdate = false;
+            const updates: any = {};
+            
+            if (userData.role !== 'Administrador') {
+              updates.role = 'Administrador';
+              needsUpdate = true;
+            }
+            
+            if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+              updates.name = "Ramon Souza";
+              needsUpdate = true;
+            }
+            
+            if (needsUpdate) {
+              setDoc(userRef, updates, { merge: true }).catch(e => {
+                console.error('Error self-healing bootstrap admin in OCList:', e);
+              });
+            }
+          }
+          
           setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
         }
       }, (error) => {
@@ -240,36 +265,28 @@ export default function OCList() {
       return;
     }
 
-    try {
-      const token = await getAuthToken();
-      
-      // Use secure backend API to approve PO
-      const response = await fetch('/api/po/approve', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ poId: po.id })
-      });
+    if ((currentUserProfile.approvalLimit || 0) < po.totalAmount && currentUserProfile.role !== 'Administrador') {
+      await addNotification('Limite Insuficiente', `Seu limite de aprovação (R$ ${formatCurrency(currentUserProfile.approvalLimit)}) é inferior ao total da OC.`, 'error');
+      return;
+    }
 
-      if (!response.ok) {
-        const text = await response.text();
-        let errorMessage = text || 'Erro ao aprovar OC no servidor';
-        try {
-          const errData = JSON.parse(text);
-          errorMessage = errData.error || errorMessage;
-        } catch (e) {
-          // If not JSON, use the raw text already captured in text variable
-        }
-        throw new Error(errorMessage);
-      }
+    try {
+      await updateDoc(doc(db, 'purchase-orders', po.id), {
+        status: 'approved',
+        approvedBy: currentUserProfile.name,
+        approvedByName: currentUserProfile.name,
+        approvedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
       await addLog('Aprovou OC', 'PurchaseOrder', po.id, auth.currentUser?.email || 'Unknown');
       await addNotification('OC Aprovada', `A ordem de compra #${po.number} foi aprovada com sucesso.`, 'success');
-    } catch (error: any) {
-      console.error('PO approve error:', error);
-      await addNotification('Erro', error.message || 'Não foi possível aprovar a OC.', 'error');
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `purchase-orders/${po.id}`);
+      } catch (e) {
+        console.error('PO approve error:', e);
+      }
     }
   };
 

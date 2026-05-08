@@ -56,8 +56,9 @@ export default class ErrorBoundary extends React.Component<Props, State> {
       const rawMessage = this.state.error?.message || '';
 
       if (rawMessage) {
-        if (rawMessage.includes('{"error":')) {
-          try {
+        try {
+          if (rawMessage.includes('{"error":')) {
+            // Find the JSON part if it's mixed with other text
             const jsonMatch = rawMessage.match(/\{"error":.*\}/);
             const jsonStr = jsonMatch ? jsonMatch[0] : rawMessage;
             const parsedError = JSON.parse(jsonStr);
@@ -69,18 +70,13 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             } else {
               errorMessage = parsedError.error || errorMessage;
             }
-          } catch (e) {
-            if (rawMessage.toLowerCase().includes('permissions') || 
-                rawMessage.toLowerCase().includes('permissão')) {
-              errorMessage = 'Acesso Negado: Suas permissões atuais não permitem esta ação.';
-            } else {
-              errorMessage = rawMessage;
-            }
+          } else if (rawMessage.toLowerCase().includes('permissions') || 
+                     rawMessage.toLowerCase().includes('permissão')) {
+            errorMessage = 'Acesso Negado: Suas permissões atuais não permitem esta ação.';
+          } else {
+            errorMessage = rawMessage;
           }
-        } else if (rawMessage.toLowerCase().includes('permissions') || 
-                   rawMessage.toLowerCase().includes('permissão')) {
-          errorMessage = 'Acesso Negado: Suas permissões atuais não permitem esta ação.';
-        } else {
+        } catch (e) {
           errorMessage = rawMessage;
         }
       }

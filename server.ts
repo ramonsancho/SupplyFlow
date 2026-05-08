@@ -1,38 +1,19 @@
-import 'dotenv/config';
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
-import "./api/lib/firebase"; // Ensure Firebase is initialized
-import api from "./api/index";
+import app from "./api/index";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 const PORT = 3000;
 
 async function startServer() {
-  const app = express();
-  app.use(express.json());
+  console.log(`[Server] Iniciando servidor no modo: ${process.env.NODE_ENV || 'development'}`);
 
-  // Enhanced Request Logging
-  app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-      console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} ${res.statusCode} - ${duration}ms`);
-    });
-    next();
-  });
-
-  // Health check
-  app.get("/api/health-check", (req, res) => res.json({ status: "ok" }));
-
-  // API Routes
-  app.use("/api", api);
-
+  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    console.log("[Server] Starting Vite Dev Middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -41,15 +22,21 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] Listening on http://0.0.0.0:${PORT}`);
-  });
+  // Only listen if not running as a Vercel function
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer().catch(err => {
-  console.error("[Server] FATAL ERROR:", err);
-  process.exit(1);
+  console.error("[Server] Erro fatal ao iniciar servidor:", err);
 });
+
+export default app;
