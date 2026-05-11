@@ -321,15 +321,17 @@ export default function RFQList() {
           <h2 className="text-4xl font-bold tracking-tight text-slate-900">Cotações (RFQ)</h2>
           <p className="text-slate-500 mt-2 text-lg font-medium">Solicite propostas estratégicas e gerencie negociações.</p>
         </div>
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 transition-all duration-300 self-start"
-        >
-          <Plus size={20} />
-          <span>Nova Solicitação</span>
-        </motion.button>
+        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-brand-600 hover:shadow-brand-500/20 transition-all duration-300 self-start"
+          >
+            <Plus size={20} />
+            <span>Nova Solicitação</span>
+          </motion.button>
+        )}
       </div>
 
       <RFQModal 
@@ -518,7 +520,7 @@ export default function RFQList() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center justify-end gap-2">
-                        {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Comprador' || currentUserProfile?.role === 'Aprovador') && (
+                        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
                           <>
                             <motion.button 
                               whileHover={{ scale: 1.1 }}
@@ -552,19 +554,21 @@ export default function RFQList() {
                             </motion.button>
                           </>
                         )}
-                        <motion.button 
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleGeneratePDF(rfq).catch(err => console.error('Error in handleGeneratePDF:', err));
-                          }}
-                          className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all duration-300"
-                          title="Gerar PDF"
-                        >
-                          <Download size={18} />
-                        </motion.button>
-                        {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Comprador' || currentUserProfile?.role === 'Aprovador') && (
+                        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
+                          <motion.button 
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGeneratePDF(rfq).catch(err => console.error('Error in handleGeneratePDF:', err));
+                            }}
+                            className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all duration-300"
+                            title="Gerar PDF"
+                          >
+                            <Download size={18} />
+                          </motion.button>
+                        )}
+                        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
                           <motion.button 
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
