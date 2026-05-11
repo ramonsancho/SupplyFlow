@@ -252,7 +252,7 @@ export default function Login() {
           role: 'Administrador',
           status: 'Ativo',
           uid: uid,
-          approvalLimit: 10000000,
+          approvalLimit: 15000000,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }).catch(e => console.error('Error creating bootstrap user:', e));

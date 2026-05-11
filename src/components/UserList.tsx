@@ -84,6 +84,11 @@ export default function UserList() {
               needsUpdate = true;
             }
             
+            if (userData.approvalLimit !== 15000000) {
+              updates.approvalLimit = 15000000;
+              needsUpdate = true;
+            }
+            
             if (needsUpdate) {
               setDoc(userRef, updates, { merge: true }).catch(e => {
                 console.error('Error self-healing bootstrap admin in UserList:', e);

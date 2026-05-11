@@ -127,6 +127,11 @@ export default function OCList() {
               needsUpdate = true;
             }
             
+            if (userData.approvalLimit !== 15000000) {
+              updates.approvalLimit = 15000000;
+              needsUpdate = true;
+            }
+            
             if (needsUpdate) {
               setDoc(userRef, updates, { merge: true }).catch(e => {
                 console.error('Error self-healing bootstrap admin in OCList:', e);
@@ -847,16 +852,36 @@ export default function OCList() {
 
               <div className="flex flex-col gap-2 min-w-[280px] self-center">
                 <div className="flex items-center justify-end gap-2">
-                  {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador' || (currentUserProfile?.role !== 'Requisitante' && oc.status === 'pending_approval')) && oc.status === 'pending_approval' && (
+                  {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Aprovador') && (oc.status === 'pending_approval' || oc.status === 'draft') && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
                       }}
-                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md"
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95"
                     >
                       <CheckCircle size={16} />
                       <span>Aprovar</span>
+                    </button>
+                  )}
+                  {oc.status === 'draft' && (
+                    <button 
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await updateDoc(doc(db, 'purchase-orders', oc.id), {
+                            status: 'pending_approval',
+                            updatedAt: serverTimestamp()
+                          });
+                          await addNotification('OC Enviada', `OC #${oc.number} enviada para aprovação.`, 'info');
+                        } catch (err) {
+                          console.error('Error sending for approval:', err);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-all shadow-md active:scale-95"
+                    >
+                      <Clock size={16} />
+                      <span>Finalizar</span>
                     </button>
                   )}
                   <button 
