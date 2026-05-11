@@ -241,7 +241,7 @@ service cloud.firestore {
       return hasRequiredFields(['name', 'email', 'role', 'status', 'createdAt']) &&
              isValidString(data.name, 1, 100) &&
              isValidEmail(data.email) &&
-             ['Administrador', 'Comprador', 'Aprovador', 'Requisitante'].hasAny([data.role]) &&
+             ['Administrador', 'Comprador', 'Compradora', 'Aprovador', 'Aprovadora', 'Requisitante'].hasAny([data.role]) &&
              ['Ativo', 'Inativo'].hasAny([data.status]) &&
              (!('approvalLimit' in data) || data.approvalLimit is number) &&
              data.createdAt is timestamp;

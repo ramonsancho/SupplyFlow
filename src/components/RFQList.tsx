@@ -75,23 +75,30 @@ export default function RFQList() {
   }, []);
 
   useEffect(() => {
+    let unsubscribeUser: (() => void) | null = null;
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userRef = doc(db, 'users', user.uid);
-        const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+        unsubscribeUser = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
           }
         }, (error) => {
           console.error('Error fetching user profile in RFQList:', error);
         });
-        return () => unsubscribeUser();
       } else {
         setCurrentUserProfile(null);
+        if (unsubscribeUser) {
+          unsubscribeUser();
+          unsubscribeUser = null;
+        }
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUser) unsubscribeUser();
+    };
   }, []);
 
   const handleSaveRFQ = async (data: any) => {
@@ -323,15 +330,26 @@ export default function RFQList() {
   });
 
   const canManageRFQ = (user: User | null) => {
-    if (!user) return false;
+    if (!user) {
+      // Temporary fallback for bootstrap admins even if profile not loaded
+      const currentEmail = auth.currentUser?.email?.toLowerCase().trim();
+      if (currentEmail === "ramonsancho@gmail.com" || currentEmail === "ramon.souza@oeg.group") return true;
+      return false;
+    }
     const role = (user.role || '').toLowerCase().trim();
+    const email = (user.email || '').toLowerCase().trim();
+    const name = (user.name || '').toLowerCase().trim();
+    
     return (
       role === 'administrador' || 
       role === 'comprador' || 
       role === 'compradora' || 
       role === 'aprovador' ||
-      user.email === 'carina.machado@oeg.group' || // Explicit fallback for Carina
-      user.name === 'Carina Machado'
+      role === 'aprovadora' ||
+      email === 'carina.machado@oeg.group' ||
+      name === 'carina machado' ||
+      email === 'ramon.souza@oeg.group' ||
+      email === 'ramonsancho@gmail.com'
     );
   };
 
