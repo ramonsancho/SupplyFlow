@@ -313,6 +313,12 @@ export default function RFQList() {
     return matchesSearch && matchesStatus;
   });
 
+  const canManageRFQ = (user: User | null) => {
+    if (!user) return false;
+    const role = user.role.toLowerCase();
+    return role === 'administrador' || role === 'comprador' || role === 'compradora' || role === 'aprovador';
+  };
+
   return (
     <div className="space-y-12">
       {/* Header Section */}
@@ -321,7 +327,7 @@ export default function RFQList() {
           <h2 className="text-4xl font-bold tracking-tight text-slate-900">Cotações (RFQ)</h2>
           <p className="text-slate-500 mt-2 text-lg font-medium">Solicite propostas estratégicas e gerencie negociações.</p>
         </div>
-        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
+        {canManageRFQ(currentUserProfile) && (
           <motion.button 
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -520,7 +526,7 @@ export default function RFQList() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center justify-end gap-2">
-                        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
+                        {canManageRFQ(currentUserProfile) && (
                           <>
                             <motion.button 
                               whileHover={{ scale: 1.1 }}
@@ -554,7 +560,7 @@ export default function RFQList() {
                             </motion.button>
                           </>
                         )}
-                        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
+                        {canManageRFQ(currentUserProfile) && (
                           <motion.button 
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
@@ -568,7 +574,7 @@ export default function RFQList() {
                             <Download size={18} />
                           </motion.button>
                         )}
-                        {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Comprador' || currentUserProfile.role === 'Aprovador') && (
+                        {canManageRFQ(currentUserProfile) && (
                           <motion.button 
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}

@@ -262,10 +262,22 @@ export default function OCList() {
     }
   };
 
+  const isBuyer = (role?: string) => {
+    if (!role) return false;
+    const r = role.toLowerCase();
+    return r === 'comprador' || r === 'compradora';
+  };
+
+  const isRequisitioner = (role?: string) => {
+    if (!role) return false;
+    const r = role.toLowerCase();
+    return r === 'requisitante';
+  };
+
   const handleApprove = async (po: PurchaseOrder) => {
     if (!currentUserProfile) return;
 
-    if (currentUserProfile.role === 'Comprador') {
+    if (isBuyer(currentUserProfile.role)) {
       await addNotification('Acesso Negado', 'Compradores não podem aprovar ordens de compra.', 'error');
       return;
     }
@@ -614,7 +626,7 @@ export default function OCList() {
           <p className="text-[#8E9299] mt-1">Acompanhe pedidos, recebimentos e saldos.</p>
         </div>
         <div className="flex items-center gap-3">
-          {currentUserProfile?.role !== 'Requisitante' && (
+          {!isRequisitioner(currentUserProfile?.role) && (
             <button 
               onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-2 bg-[#141414] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
@@ -896,7 +908,7 @@ export default function OCList() {
                     <Download size={16} />
                     <span>PDF</span>
                   </button>
-                  {currentUserProfile?.role !== 'Requisitante' && (
+                  {!isRequisitioner(currentUserProfile?.role) && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -912,7 +924,7 @@ export default function OCList() {
                 </div>
 
                 <div className="flex items-center justify-end gap-2">
-                  {currentUserProfile?.role !== 'Requisitante' && (oc.status === 'approved' || oc.status === 'sent') && oc.receivedAmount === 0 && (
+                  {!isRequisitioner(currentUserProfile?.role) && (oc.status === 'approved' || oc.status === 'sent') && oc.receivedAmount === 0 && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -925,7 +937,7 @@ export default function OCList() {
                       <span>Cancelar</span>
                     </button>
                   )}
-                  {currentUserProfile?.role !== 'Requisitante' && (currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador') && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
+                  {!isRequisitioner(currentUserProfile?.role) && (currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador') && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -939,7 +951,7 @@ export default function OCList() {
                       <span>Editar Valor</span>
                     </button>
                   )}
-                  {currentUserProfile?.role !== 'Requisitante' && oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && oc.status !== 'cancelled' && (
+                  {!isRequisitioner(currentUserProfile?.role) && oc.status !== 'closed' && oc.status !== 'draft' && oc.status !== 'pending_approval' && oc.status !== 'cancelled' && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -954,7 +966,7 @@ export default function OCList() {
                       <span>Concluir</span>
                     </button>
                   )}
-                  {currentUserProfile?.role !== 'Requisitante' && (
+                  {!isRequisitioner(currentUserProfile?.role) && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
