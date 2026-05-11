@@ -35,6 +35,7 @@ import { twMerge } from 'tailwind-merge';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { db, auth, handleFirestoreError, OperationType, formatDate, formatCurrency } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { isBootstrapAdmin } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
@@ -105,67 +106,77 @@ export default function OCList() {
   }, [location.state, isLoading]);
 
   useEffect(() => {
-    if (auth.currentUser) {
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          const userEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
-          
-          // Self-healing for bootstrap admins
-          if (isBootstrapAdmin(userEmail)) {
-            let needsUpdate = false;
-            const updates: any = {};
+    let unsubscribeProfile: (() => void) | null = null;
+    let unsubscribeUsersList: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            const userEmail = user.email?.toLowerCase().trim() || '';
             
-            if (userData.role !== 'Administrador') {
-              updates.role = 'Administrador';
-              needsUpdate = true;
+            // Self-healing for bootstrap admins
+            if (isBootstrapAdmin(userEmail)) {
+              let needsUpdate = false;
+              const updates: any = {};
+              
+              if (userData.role !== 'Administrador') {
+                updates.role = 'Administrador';
+                needsUpdate = true;
+              }
+              
+              if (userData.name !== "Ramon Souza") {
+                updates.name = "Ramon Souza";
+                needsUpdate = true;
+              }
+              
+              if (userData.approvalLimit !== 15000000) {
+                updates.approvalLimit = 15000000;
+                needsUpdate = true;
+              }
+              
+              if (needsUpdate) {
+                setDoc(userRef, updates, { merge: true }).catch(e => {
+                  console.error('Error self-healing bootstrap admin in OCList:', e);
+                });
+              }
             }
             
-            if (userData.name !== "Ramon Souza") {
-              updates.name = "Ramon Souza";
-              needsUpdate = true;
-            }
-            
-            if (userData.approvalLimit !== 15000000) {
-              updates.approvalLimit = 15000000;
-              needsUpdate = true;
-            }
-            
-            if (needsUpdate) {
-              setDoc(userRef, updates, { merge: true }).catch(e => {
-                console.error('Error self-healing bootstrap admin in OCList:', e);
-              });
-            }
+            setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
           }
-          
-          setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
-        }
-      }, (error) => {
-        try {
-          handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
-        } catch (e) {
-          console.error('Failed to fetch user profile in OCList:', e);
-        }
-      });
+        }, (error) => {
+          try {
+            handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+          } catch (e) {
+            console.error('Failed to fetch user profile in OCList:', e);
+          }
+        });
 
-      const qUsers = query(collection(db, 'users'));
-      const unsubscribeAllUsers = onSnapshot(qUsers, (snapshot) => {
-        const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-        setAllUsers(users);
-      }, (error) => {
-        try {
-          handleFirestoreError(error, OperationType.LIST, 'users');
-        } catch (e) {
-          console.error('Failed to list users in OCList:', e);
-        }
-      });
+        const qUsers = query(collection(db, 'users'));
+        unsubscribeUsersList = onSnapshot(qUsers, (snapshot) => {
+          const users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+          setAllUsers(users);
+        }, (error) => {
+          try {
+            handleFirestoreError(error, OperationType.LIST, 'users');
+          } catch (e) {
+            console.error('Failed to list users in OCList:', e);
+          }
+        });
+      } else {
+        setCurrentUserProfile(null);
+        if (unsubscribeProfile) { unsubscribeProfile(); unsubscribeProfile = null; }
+        if (unsubscribeUsersList) { unsubscribeUsersList(); unsubscribeUsersList = null; }
+      }
+    });
 
-      return () => {
-        unsubscribeUser();
-        unsubscribeAllUsers();
-      };
-    }
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+      if (unsubscribeUsersList) unsubscribeUsersList();
+    };
   }, []);
 
   useEffect(() => {

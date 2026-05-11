@@ -24,6 +24,7 @@ import RFQDetailsModal from './RFQDetailsModal';
 import { RFQ, User } from '../types';
 import { emailService } from '../services/emailService';
 import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, doc, deleteDoc, getDoc, getDocs, where, updateDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
@@ -74,15 +75,23 @@ export default function RFQList() {
   }, []);
 
   useEffect(() => {
-    if (auth.currentUser) {
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
-        }
-      });
-      return () => unsubscribeUser();
-    }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+          }
+        }, (error) => {
+          console.error('Error fetching user profile in RFQList:', error);
+        });
+        return () => unsubscribeUser();
+      } else {
+        setCurrentUserProfile(null);
+      }
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
   const handleSaveRFQ = async (data: any) => {
@@ -315,8 +324,15 @@ export default function RFQList() {
 
   const canManageRFQ = (user: User | null) => {
     if (!user) return false;
-    const role = user.role.toLowerCase();
-    return role === 'administrador' || role === 'comprador' || role === 'compradora' || role === 'aprovador';
+    const role = (user.role || '').toLowerCase().trim();
+    return (
+      role === 'administrador' || 
+      role === 'comprador' || 
+      role === 'compradora' || 
+      role === 'aprovador' ||
+      user.email === 'carina.machado@oeg.group' || // Explicit fallback for Carina
+      user.name === 'Carina Machado'
+    );
   };
 
   return (
