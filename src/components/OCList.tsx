@@ -122,7 +122,7 @@ export default function OCList() {
               needsUpdate = true;
             }
             
-            if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+            if (userData.name !== "Ramon Souza") {
               updates.name = "Ramon Souza";
               needsUpdate = true;
             }
@@ -332,7 +332,7 @@ export default function OCList() {
     }
   };
 
-  const handleEditAmount = async (newAmount: number, items?: any[]) => {
+  const handleEditAmount = async (newAmount: number, items?: any[], deliveryDate?: string) => {
     if (!selectedPO) return;
 
     try {
@@ -346,6 +346,10 @@ export default function OCList() {
 
       if (items) {
         updateData.items = items;
+      }
+      
+      if (deliveryDate) {
+        updateData.deliveryDate = deliveryDate;
       }
 
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
@@ -657,7 +661,7 @@ export default function OCList() {
           setIsEditAmountModalOpen(false);
           setSelectedPO(null);
         }}
-        onSubmit={(newAmount, items) => handleEditAmount(newAmount, items).catch(err => console.error('Error in handleEditAmount:', err))}
+        onSubmit={(newAmount, items, deliveryDate) => handleEditAmount(newAmount, items, deliveryDate).catch(err => console.error('Error in handleEditAmount:', err))}
         po={selectedPO}
       />
 
@@ -843,7 +847,7 @@ export default function OCList() {
 
               <div className="flex flex-col gap-2 min-w-[280px] self-center">
                 <div className="flex items-center justify-end gap-2">
-                  {currentUserProfile?.role !== 'Requisitante' && oc.status === 'pending_approval' && (
+                  {(currentUserProfile?.role === 'Administrador' || currentUserProfile?.role === 'Aprovador' || (currentUserProfile?.role !== 'Requisitante' && oc.status === 'pending_approval')) && oc.status === 'pending_approval' && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();

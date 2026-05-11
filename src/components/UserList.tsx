@@ -79,7 +79,7 @@ export default function UserList() {
               needsUpdate = true;
             }
             
-            if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
+            if (userData.name !== "Ramon Souza") {
               updates.name = "Ramon Souza";
               needsUpdate = true;
             }

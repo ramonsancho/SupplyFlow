@@ -16,6 +16,7 @@ const editAmountSchema = z.object({
     tax: z.number().min(0, 'Imposto deve ser positivo'),
   })),
   totalAmount: z.number().min(0, 'O valor deve ser positivo'),
+  deliveryDate: z.string().min(1, 'Prazo de entrega é obrigatório'),
 });
 
 type EditAmountFormData = z.infer<typeof editAmountSchema>;
@@ -23,7 +24,7 @@ type EditAmountFormData = z.infer<typeof editAmountSchema>;
 interface EditAmountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (newAmount: number, items: POItem[]) => void;
+  onSubmit: (newAmount: number, items: POItem[], deliveryDate: string) => void;
   po: PurchaseOrder | null;
 }
 
@@ -33,6 +34,7 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
     defaultValues: {
       items: po?.items || [],
       totalAmount: po?.totalAmount || 0,
+      deliveryDate: po?.deliveryDate || '',
     }
   });
 
@@ -58,7 +60,8 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
 
       reset({ 
         items: itemsWithIds,
-        totalAmount: po.totalAmount 
+        totalAmount: po.totalAmount,
+        deliveryDate: po.deliveryDate || ''
       });
     }
   }, [isOpen, po, reset]);
@@ -88,7 +91,7 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
 
         <form 
           onSubmit={handleSubmit(
-            (data) => onSubmit(calculatedTotal, data.items as POItem[]),
+            (data) => onSubmit(calculatedTotal, data.items as POItem[], data.deliveryDate),
             (err) => console.error("Validation errors:", err)
           )} 
           className="flex-1 overflow-y-auto p-8 space-y-6"
@@ -96,8 +99,20 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
           <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
             <AlertCircle className="text-blue-500 shrink-0 mt-0.5" size={18} />
             <p className="text-xs text-blue-700 font-medium leading-relaxed">
-              Atenção: Você está alterando os itens de uma OC já aprovada. O valor total será recalculado automaticamente.
+              Atenção: Você está alterando os itens ou prazo de uma OC já aprovada. O valor total será recalculado automaticamente.
             </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest ml-1">Prazo de Entrega</label>
+              <input 
+                type="date"
+                {...register('deliveryDate')}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+              />
+              {errors.deliveryDate && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1">{errors.deliveryDate.message}</p>}
+            </div>
           </div>
 
           <div className="space-y-4">
