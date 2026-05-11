@@ -182,6 +182,17 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     }
   };
 
+  const isAuthorized = () => {
+    const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+    if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
+    if (!currentUserProfile) return false;
+    const role = (currentUserProfile.role || '').toLowerCase().trim();
+    const name = (currentUserProfile.name || '').toLowerCase().trim();
+    return ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'].includes(role) || 
+           name.includes('carina') || 
+           name.includes('ramon');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -233,7 +244,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
             <div className="lg:col-span-2 space-y-6">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-[#141414] uppercase tracking-widest">Propostas Recebidas</h4>
-                {currentUserProfile?.role !== 'Requisitante' && (
+                {isAuthorized() && (
                   <button 
                     onClick={() => setIsProposalModalOpen(true)}
                     className="flex items-center gap-2 text-xs font-bold text-white bg-[#141414] px-4 py-2 rounded-xl hover:scale-105 transition-all shadow-md"
@@ -297,7 +308,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                            proposal.status === 'accepted' ? 'Aceita' : 'Rejeitada'}
                         </span>
 
-                         {proposal.status === 'pending' && rfq.status !== 'closed' && currentUserProfile?.role !== 'Requisitante' && (
+                         {proposal.status === 'pending' && rfq.status !== 'closed' && isAuthorized() && (
                           <button 
                             onClick={() => handleAcceptProposal(proposal).catch(err => console.error('Error in handleAcceptProposal:', err))}
                             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md"

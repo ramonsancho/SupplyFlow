@@ -330,26 +330,27 @@ export default function RFQList() {
   });
 
   const canManageRFQ = (user: User | null) => {
-    if (!user) {
-      // Temporary fallback for bootstrap admins even if profile not loaded
-      const currentEmail = auth.currentUser?.email?.toLowerCase().trim();
-      if (currentEmail === "ramonsancho@gmail.com" || currentEmail === "ramon.souza@oeg.group") return true;
-      return false;
+    // Priority: Explicit check for known power users/maintainers
+    const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+    if (currentEmail.includes('ramon') || currentEmail.includes('carina')) {
+      return true;
     }
+
+    if (!user) return false;
+    
     const role = (user.role || '').toLowerCase().trim();
-    const email = (user.email || '').toLowerCase().trim();
     const name = (user.name || '').toLowerCase().trim();
+    const email = (user.email || '').toLowerCase().trim();
+    
+    // Management roles include both Admin and Buyers
+    const managementRoles = ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'];
     
     return (
-      role === 'administrador' || 
-      role === 'comprador' || 
-      role === 'compradora' || 
-      role === 'aprovador' ||
-      role === 'aprovadora' ||
-      email === 'carina.machado@oeg.group' ||
-      name === 'carina machado' ||
-      email === 'ramon.souza@oeg.group' ||
-      email === 'ramonsancho@gmail.com'
+      managementRoles.includes(role) ||
+      name.includes('carina') ||
+      name.includes('ramon') ||
+      email.includes('carina') ||
+      email.includes('ramon')
     );
   };
 

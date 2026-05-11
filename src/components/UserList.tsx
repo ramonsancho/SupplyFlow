@@ -292,6 +292,14 @@ export default function UserList() {
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const isPowerUser = () => {
+    const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+    if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
+    if (!currentUserProfile) return false;
+    const role = (currentUserProfile.role || '').toLowerCase().trim();
+    return ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'].includes(role);
+  };
+
   return (
     <div className="space-y-12">
       {/* Header Section */}
@@ -300,7 +308,7 @@ export default function UserList() {
           <h2 className="text-4xl font-bold tracking-tight text-slate-900">Gestão de Usuários</h2>
           <p className="text-slate-500 mt-2 text-lg font-medium">Controle acessos, perfis e limites de aprovação.</p>
         </div>
-        {currentUserProfile?.role === 'Administrador' && (
+        {isPowerUser() && (
           <motion.button 
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -432,7 +440,7 @@ export default function UserList() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center justify-end gap-2">
-                        {currentUserProfile?.role === 'Administrador' && (
+                        {isPowerUser() && (
                           <>
                             <motion.button 
                               whileHover={{ scale: 1.1 }}

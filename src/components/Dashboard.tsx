@@ -423,8 +423,16 @@ export default function Dashboard() {
   ];
 
   // Calculate Action Items (Inbox)
-  const isAdmin = currentUserProfile?.role === 'Administrador' || (auth.currentUser?.email && isBootstrapAdmin(auth.currentUser.email));
-  const isApprover = isAdmin || currentUserProfile?.role === 'Aprovador';
+  const isPowerUser = () => {
+    const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+    if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
+    if (!currentUserProfile) return false;
+    const role = (currentUserProfile.role || '').toLowerCase().trim();
+    return ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'].includes(role);
+  };
+
+  const isAdmin = isPowerUser();
+  const isApprover = isPowerUser();
 
   const inboxItems = [
     ...(isApprover ? [{
