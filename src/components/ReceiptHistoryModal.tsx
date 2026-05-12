@@ -68,9 +68,8 @@ export default function ReceiptHistoryModal({ isOpen, onClose, po }: ReceiptHist
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest mb-1">Valor Recebido</p>
                       <div className="flex items-center justify-end gap-1 text-green-600">
-                        <DollarSign size={18} />
                         <span className="text-xl font-bold">
-                          {formatCurrency(receipt.amount)}
+                          {formatCurrency(receipt.amount, po.currency)}
                         </span>
                       </div>
                     </div>
@@ -83,11 +82,11 @@ export default function ReceiptHistoryModal({ isOpen, onClose, po }: ReceiptHist
           <div className="mt-8 p-6 bg-[#141414] rounded-2xl text-white flex items-center justify-between">
             <div>
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Total Recebido</p>
-              <p className="text-2xl font-bold">R$ {formatCurrency(po.receivedAmount)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(po.receivedAmount, po.currency)}</p>
             </div>
             <div className="text-right">
               <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1">Saldo Pendente</p>
-              <p className="text-xl font-bold text-white/80">R$ {formatCurrency(po.totalAmount - po.receivedAmount)}</p>
+              <p className="text-xl font-bold text-white/80">{formatCurrency(po.totalAmount - po.receivedAmount, po.currency)}</p>
             </div>
           </div>
         </div>

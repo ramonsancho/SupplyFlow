@@ -31,6 +31,7 @@
         "status": { "type": "string", "enum": ["draft", "sent", "closed"] },
         "desiredDate": { "type": "string", "format": "date" },
         "items": { "type": "array", "items": { "$ref": "#/entities/RFQItem" } },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "number", "status", "items"]
@@ -60,6 +61,7 @@
         "receivedAmount": { "type": "number" },
         "receipts": { "type": "array", "items": { "$ref": "#/entities/Receipt" } },
         "items": { "type": "array", "items": { "$ref": "#/entities/POItem" } },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "approvedBy": { "type": "string" },
         "approvedAt": { "type": "string", "format": "date-time" }
@@ -163,6 +165,7 @@
         "deliveryDate": { "type": "string", "format": "date" },
         "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
         "items": { "type": "array", "items": { "$ref": "#/entities/ProposalItem" } },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["rfqId", "supplierId", "supplierName", "totalValue", "deliveryDate", "status", "items"]

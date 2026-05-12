@@ -512,6 +512,7 @@ export default function RFQList() {
                   <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Status</th>
                   <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Data Desejada</th>
                   <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Itens</th>
+                  <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Moeda</th>
                   <th className="px-8 py-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 text-right">Ações</th>
                 </tr>
               </thead>
@@ -557,6 +558,11 @@ export default function RFQList() {
                     <td className="px-8 py-6">
                       <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl uppercase tracking-widest">
                         {rfq.items.length} {rfq.items.length === 1 ? 'Item' : 'Itens'}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+                        {rfq.currency || 'BRL'}
                       </span>
                     </td>
                     <td className="px-8 py-6">

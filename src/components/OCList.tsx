@@ -580,8 +580,8 @@ export default function OCList() {
     const tableData = po.items.map(item => [
       item.description,
       item.quantity.toString(),
-      `R$ ${formatCurrency(item.unitPrice)}`,
-      `R$ ${formatCurrency(item.quantity * item.unitPrice)}`
+      formatCurrency(item.unitPrice, po.currency),
+      formatCurrency(item.quantity * item.unitPrice, po.currency)
     ]);
 
     autoTable(doc, {
@@ -596,7 +596,7 @@ export default function OCList() {
 
     // Total
     doc.setFont('helvetica', 'bold');
-    doc.text(`TOTAL DA ORDEM: R$ ${formatCurrency(po.totalAmount)}`, 140, finalY + 15);
+    doc.text(`TOTAL DA ORDEM: ${formatCurrency(po.totalAmount, po.currency)}`, 140, finalY + 15);
 
     // Created and Approved Info
     doc.setFontSize(9);
@@ -860,11 +860,11 @@ export default function OCList() {
               <div className="flex-1 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest mb-1">Total</p>
-                  <p className="text-lg font-bold text-[#141414]">R$ {formatCurrency(oc.totalAmount)}</p>
+                  <p className="text-lg font-bold text-[#141414]">{formatCurrency(oc.totalAmount, oc.currency)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest mb-1">Recebido</p>
-                  <p className="text-lg font-bold text-green-600">R$ {formatCurrency(oc.receivedAmount)}</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(oc.receivedAmount, oc.currency)}</p>
                 </div>
               </div>
 
@@ -873,11 +873,11 @@ export default function OCList() {
                 <div className="w-full bg-[#F5F5F5] h-2 rounded-full overflow-hidden">
                   <div 
                     className="bg-[#141414] h-full transition-all duration-1000" 
-                    style={{ width: `${(oc.receivedAmount / oc.totalAmount) * 100}%` }}
+                    style={{ width: `${(oc.receivedAmount / (oc.totalAmount || 1)) * 100}%` }}
                   ></div>
                 </div>
                 <p className="text-xs font-bold text-[#141414] mt-2">
-                  R$ {formatCurrency(oc.totalAmount - oc.receivedAmount)} pendente
+                  {formatCurrency(oc.totalAmount - oc.receivedAmount, oc.currency)} pendente
                 </p>
               </div>
 

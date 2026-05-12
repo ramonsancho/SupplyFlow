@@ -75,12 +75,25 @@ export function formatDate(dateStr: string | undefined | null): string {
   }
 }
 
-export function formatCurrency(value: number | undefined | null): string {
+export function formatCurrency(value: number | undefined | null, currency: 'BRL' | 'USD' | 'EUR' = 'BRL'): string {
   const val = value || 0;
-  return val.toLocaleString('pt-BR', {
+  const locales = {
+    'BRL': 'pt-BR',
+    'USD': 'en-US',
+    'EUR': 'de-DE'
+  };
+  const symbols = {
+    'BRL': 'R$',
+    'USD': '$',
+    'EUR': '€'
+  };
+
+  const formatted = val.toLocaleString(locales[currency] || 'pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+  return `${symbols[currency] || 'R$'} ${formatted}`;
 }
 
 export async function getAuthToken(): Promise<string | null> {

@@ -11,6 +11,7 @@ const rfqSchema = z.object({
   title: z.string().min(5, 'Título deve ter pelo menos 5 caracteres'),
   desiredDate: z.string().min(1, 'Data desejada obrigatória'),
   family: z.string().optional(),
+  currency: z.enum(['BRL', 'USD', 'EUR']),
   items: z.array(z.object({
     description: z.string().min(3, 'Descrição obrigatória'),
     quantity: z.number().min(1, 'Quantidade deve ser pelo menos 1'),
@@ -36,6 +37,7 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
       title: initialData?.title || '',
       desiredDate: initialData?.desiredDate || '',
       family: initialData?.family || '',
+      currency: initialData?.currency || 'BRL',
       items: initialData?.items || [{ description: '', quantity: 1, unit: 'un' }],
     }
   });
@@ -46,6 +48,7 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
         title: initialData?.title || '',
         desiredDate: initialData?.desiredDate || '',
         family: initialData?.family || '',
+        currency: initialData?.currency || 'BRL',
         items: initialData?.items || [{ description: '', quantity: 1, unit: 'un' }],
       });
     }
@@ -134,6 +137,23 @@ export default function RFQModal({ isOpen, onClose, onSubmit, initialData }: RFQ
                       <option key={family} value={family}>{family}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Moeda</label>
+                <div className="flex gap-4">
+                  {(['BRL', 'USD', 'EUR'] as const).map((curr) => (
+                    <label key={curr} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        value={curr}
+                        {...register('currency')}
+                        className="w-4 h-4 text-[#141414] border-slate-300 focus:ring-[#141414]"
+                      />
+                      <span className="text-sm font-bold text-slate-600 group-hover:text-[#141414] transition-colors">{curr}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 

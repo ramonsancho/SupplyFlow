@@ -47,7 +47,7 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
 
   const onFormSubmit = (data: ReceiveFormData) => {
     if (data.amount > remaining + 0.01) { // Small tolerance for float issues
-      setValidationError(`O valor recebido (R$ ${formatCurrency(data.amount)}) não pode ser maior que o saldo pendente (R$ ${formatCurrency(remaining)}).`);
+      setValidationError(`O valor recebido (${formatCurrency(data.amount, po.currency)}) não pode ser maior que o saldo pendente (${formatCurrency(remaining, po.currency)}).`);
       return;
     }
     setValidationError(null);
@@ -78,15 +78,15 @@ export default function ReceiveModal({ isOpen, onClose, onSubmit, po }: ReceiveM
           <div className="bg-[#F5F5F5] p-4 rounded-2xl space-y-2">
             <div className="flex justify-between text-xs font-bold text-[#8E9299] uppercase tracking-widest">
               <span>Total da OC</span>
-              <span>R$ {formatCurrency(po.totalAmount)}</span>
+              <span>{formatCurrency(po.totalAmount, po.currency)}</span>
             </div>
             <div className="flex justify-between text-xs font-bold text-green-600 uppercase tracking-widest">
               <span>Já Recebido</span>
-              <span>R$ {formatCurrency(po.receivedAmount)}</span>
+              <span>{formatCurrency(po.receivedAmount, po.currency)}</span>
             </div>
             <div className="pt-2 border-t border-[#E5E5E5] flex justify-between text-sm font-bold text-[#141414] uppercase tracking-widest">
               <span>Saldo Pendente</span>
-              <span>R$ {formatCurrency(remaining)}</span>
+              <span>{formatCurrency(remaining, po.currency)}</span>
             </div>
           </div>
 

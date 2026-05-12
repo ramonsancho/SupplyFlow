@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { X, Save, Plus, Trash2, DollarSign, Tag, AlertCircle } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../types';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, formatCurrency } from '../firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 const poSchema = z.object({
@@ -12,6 +12,7 @@ const poSchema = z.object({
   family: z.string().optional(),
   deliveryDate: z.string().min(1, 'Data de entrega obrigatória'),
   status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled']),
+  currency: z.enum(['BRL', 'USD', 'EUR']),
   items: z.array(z.object({
     id: z.string().optional(),
     description: z.string().min(3, 'Descrição obrigatória'),
@@ -43,6 +44,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
       family: initialData?.family || '',
       deliveryDate: initialData?.deliveryDate || '',
       status: initialData?.status || 'draft',
+      currency: initialData?.currency || 'BRL',
       items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
     }
   });
@@ -55,6 +57,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
         family: initialData?.family || '',
         deliveryDate: initialData?.deliveryDate || '',
         status: initialData?.status || 'draft',
+        currency: initialData?.currency || 'BRL',
         items: (initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }]).map(item => ({
           ...item,
           id: (item as any).id || crypto.randomUUID()
@@ -82,6 +85,8 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
 
     return () => unsubscribe();
   }, [isOpen]);
+
+  const currency = watch('currency') || 'BRL';
 
   const onFormSubmit = (data: POFormData) => {
     const selectedSupplier = suppliers.find(s => s.id === data.supplierId);
@@ -167,6 +172,23 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
               />
               {errors.deliveryDate && <p className="text-xs text-red-500 font-medium">{errors.deliveryDate.message}</p>}
             </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Moeda</label>
+              <div className="flex gap-4 h-[48px] items-center">
+                {(['BRL', 'USD', 'EUR'] as const).map((curr) => (
+                  <label key={curr} className="flex items-center gap-2 cursor-pointer group">
+                    <input 
+                      type="radio" 
+                      value={curr}
+                      {...register('currency')}
+                      className="w-4 h-4 text-[#141414] border-slate-300 focus:ring-[#141414]"
+                    />
+                    <span className="text-sm font-bold text-slate-600 group-hover:text-[#141414] transition-colors">{curr}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -245,7 +267,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Total do Pedido</p>
-                <p className="text-3xl font-bold">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-bold">{formatCurrency(total, currency)}</p>
               </div>
             </div>
             <div className="text-right hidden sm:block">

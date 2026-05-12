@@ -168,6 +168,7 @@ service cloud.firestore {
              data.number is int &&
              isValidString(data.title, 1, 100) &&
              ['draft', 'sent', 'closed'].hasAny([data.status]) &&
+             (!('currency' in data) || ['BRL', 'USD', 'EUR'].hasAny([data.currency])) &&
              data.items is list &&
              data.createdAt is timestamp;
     }
@@ -192,6 +193,7 @@ service cloud.firestore {
              (!('createdByName' in data) || data.createdByName is string) &&
              (!('family' in data) || data.family is string) &&
              (!('revision' in data) || data.revision is int) &&
+             (!('currency' in data) || ['BRL', 'USD', 'EUR'].hasAny([data.currency])) &&
              (!('updatedAt' in data) || data.updatedAt is timestamp) &&
              data.createdAt is timestamp;
     }
@@ -233,6 +235,7 @@ service cloud.firestore {
              data.totalValue is number && data.totalValue >= 0 &&
              data.deliveryDate is string &&
              ['pending', 'accepted', 'rejected'].hasAny([data.status]) &&
+             (!('currency' in data) || ['BRL', 'USD', 'EUR'].hasAny([data.currency])) &&
              data.items is list &&
              data.createdAt is timestamp;
     }

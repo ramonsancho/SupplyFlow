@@ -126,6 +126,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
       ...data,
       items: cleanedItems,
       totalValue,
+      currency: rfq.currency || 'BRL',
       supplierName: selectedSupplier?.name || 'Unknown'
     });
   };
@@ -192,7 +193,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Informações Adicionais</label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Frete (R$)</label>
+                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Frete ({rfq.currency || 'BRL'})</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -201,7 +202,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Imposto (R$)</label>
+                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Imposto ({rfq.currency || 'BRL'})</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -210,7 +211,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Desconto (R$)</label>
+                  <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Valor do Desconto ({rfq.currency || 'BRL'})</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -233,7 +234,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
                     <p className="text-[10px] text-[#8E9299] uppercase tracking-widest">{field.quantity} {field.unit}</p>
                   </div>
                   <div className="w-40 space-y-2">
-                    <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Preço Unitário (R$)</label>
+                    <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Preço Unitário ({rfq.currency || 'BRL'})</label>
                     <input 
                       type="number"
                       step="0.01"
@@ -244,7 +245,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
                   <div className="w-32 flex flex-col justify-end items-end">
                     <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Subtotal</p>
                     <p className="text-sm font-bold text-[#141414]">
-                      R$ {formatCurrency(field.quantity * (watch(`items.${index}.unitPrice`) || 0))}
+                      {formatCurrency(field.quantity * (watch(`items.${index}.unitPrice`) || 0), rfq.currency)}
                     </p>
                   </div>
                 </div>
@@ -255,7 +256,7 @@ export default function ProposalModal({ isOpen, onClose, onSubmit, rfq }: Propos
           <div className="flex justify-between items-center p-6 bg-[#141414] rounded-2xl text-white">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest opacity-60">Valor Total da Proposta</p>
-              <p className="text-2xl font-bold">R$ {formatCurrency(totalValue)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalValue, rfq.currency)}</p>
             </div>
             <div className="flex gap-4">
               <button 

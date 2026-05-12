@@ -382,7 +382,7 @@ export default function Dashboard() {
   const kpis = [
     { 
       label: 'Gasto Total', 
-      value: `R$ ${formatCurrency(totalSpent)}`, 
+      value: formatCurrency(totalSpent), 
       icon: ShoppingBag, 
       color: 'brand',
       trend: `${openPOsCount} Ativas`,
@@ -390,7 +390,7 @@ export default function Dashboard() {
     },
     { 
       label: 'Total Economizado', 
-      value: `R$ ${formatCurrency(totalSavings)}`, 
+      value: formatCurrency(totalSavings), 
       icon: Target, 
       color: 'emerald',
       trend: `${((totalSavings / (totalSpent + totalSavings)) * 100).toFixed(2)}% Saving`,
@@ -668,10 +668,10 @@ export default function Dashboard() {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
-                  tickFormatter={(value) => `R$ ${value / 1000}k`}
+                  tickFormatter={(value) => `${value / 1000}k`}
                 />
                 <Tooltip 
-                  formatter={(value: number) => `R$ ${formatCurrency(value)}`}
+                  formatter={(value: number) => formatCurrency(value)}
                   contentStyle={{ 
                     backgroundColor: '#0f172a', 
                     border: 'none', 
@@ -727,7 +727,7 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => `R$ ${formatCurrency(value)}`}
+                  formatter={(value: number) => formatCurrency(value)}
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                 />
               </PieChart>
@@ -782,7 +782,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-mono font-bold text-slate-900">R$ {formatCurrency(s.total)}</p>
+                  <p className="text-sm font-mono font-bold text-slate-900">{formatCurrency(s.total)}</p>
                   <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
                     <div 
                       className="h-full bg-brand-500 rounded-full" 
@@ -848,7 +848,7 @@ export default function Dashboard() {
                         {isOverdue ? 'Vencido em' : 'Vence em'} {formatDate(po.deliveryDate)}
                       </p>
                       <span className="w-1 h-1 rounded-full bg-slate-300" />
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">R$ {formatCurrency(po.totalAmount)}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{formatCurrency(po.totalAmount, po.currency)}</p>
                     </div>
                   </div>
                 </div>

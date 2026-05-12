@@ -15,6 +15,8 @@ export type Supplier = {
   createdAt: string;
 };
 
+export type Currency = 'BRL' | 'USD' | 'EUR';
+
 export type RFQ = {
   id: string;
   number: number;
@@ -23,6 +25,7 @@ export type RFQ = {
   status: 'draft' | 'sent' | 'closed';
   desiredDate: string;
   items: RFQItem[];
+  currency?: Currency;
   createdAt: string;
 };
 
@@ -45,6 +48,7 @@ export type Proposal = {
   deliveryDate: string;
   status: 'pending' | 'accepted' | 'rejected';
   items: ProposalItem[];
+  currency?: Currency;
   createdAt: string;
 };
 
@@ -77,6 +81,7 @@ export type PurchaseOrder = {
   receivedAmount: number;
   receipts?: Receipt[];
   items: POItem[];
+  currency?: Currency;
   createdAt: string;
   updatedAt?: string;
   revision?: number;

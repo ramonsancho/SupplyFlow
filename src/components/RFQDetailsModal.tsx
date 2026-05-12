@@ -127,6 +127,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         deliveryDate: proposal.deliveryDate,
         status: 'pending_approval',
         totalAmount: totalAmount,
+        currency: rfq.currency || 'BRL',
         receivedAmount: 0,
         items: (proposal.items || []).map(item => ({
           id: (item as any).id || crypto.randomUUID(),
@@ -276,17 +277,17 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-[#141414]">R$ {formatCurrency(proposal.totalValue)}</p>
+                          <p className="text-lg font-bold text-[#141414]">{formatCurrency(proposal.totalValue, rfq.currency)}</p>
                           {(proposal.freightValue || proposal.taxValue || proposal.discountValue) ? (
                             <div className="flex flex-col items-end gap-0.5 mt-1">
                               {proposal.freightValue! > 0 && (
-                                <p className="text-[9px] text-slate-400 uppercase tracking-tighter">Frete: R$ {formatCurrency(proposal.freightValue!)}</p>
+                                <p className="text-[9px] text-slate-400 uppercase tracking-tighter">Frete: {formatCurrency(proposal.freightValue!, rfq.currency)}</p>
                               )}
                               {proposal.taxValue! > 0 && (
-                                <p className="text-[9px] text-slate-400 uppercase tracking-tighter">Imposto: R$ {formatCurrency(proposal.taxValue!)}</p>
+                                <p className="text-[9px] text-slate-400 uppercase tracking-tighter">Imposto: {formatCurrency(proposal.taxValue!, rfq.currency)}</p>
                               )}
                               {proposal.discountValue! > 0 && (
-                                <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter">Desconto: - R$ {formatCurrency(proposal.discountValue!)}</p>
+                                <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter">Desconto: - {formatCurrency(proposal.discountValue!, rfq.currency)}</p>
                               )}
                             </div>
                           ) : null}
