@@ -47,6 +47,7 @@ export default function SupplierList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [sortOption, setSortOption] = useState('name_asc');
   const [families, setFamilies] = useState<string[]>(['Serviços de TI', 'Limpeza', 'Logística de Material']);
   const [selectedFamily, setSelectedFamily] = useState('Todas as Famílias');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | undefined>();
@@ -161,6 +162,21 @@ export default function SupplierList() {
     const matchesFamily = selectedFamily === 'Todas as Famílias' || s.families.includes(selectedFamily);
     const matchesCritical = filterCritical === null || s.isCritical === filterCritical;
     return matchesSearch && matchesFamily && matchesCritical;
+  }).sort((a, b) => {
+    switch (sortOption) {
+      case 'name_asc':
+        return a.name.localeCompare(b.name);
+      case 'accuracy_desc':
+        return (b.accuracy || 0) - (a.accuracy || 0);
+      case 'accuracy_asc':
+        return (a.accuracy || 0) - (b.accuracy || 0);
+      case 'rating_desc':
+        return (b.rating || 0) - (a.rating || 0);
+      case 'rating_asc':
+        return (a.rating || 0) - (b.rating || 0);
+      default:
+        return 0;
+    }
   });
 
   return (
@@ -236,6 +252,23 @@ export default function SupplierList() {
               <Filter size={18} />
               <span>Filtros</span>
             </button>
+            <div className="relative flex-1 lg:w-64">
+              <select 
+                className="w-full appearance-none px-6 py-4 text-sm font-bold text-slate-700 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-brand-500/20 outline-none cursor-pointer pl-12"
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value)}
+              >
+                <option value="name_asc">Nome (A-Z)</option>
+                <option value="accuracy_desc">Acuracidade: Maior para Menor</option>
+                <option value="accuracy_asc">Acuracidade: Menor para Maior</option>
+                <option value="rating_desc">Nota: Maior para Menor</option>
+                <option value="rating_asc">Nota: Menor para Maior</option>
+              </select>
+              <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <Filter size={16} />
+              </div>
+              <ChevronRight size={16} className="absolute right-5 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" />
+            </div>
             <div className="relative flex-1 lg:w-64">
               <select 
                 className="w-full appearance-none px-6 py-4 text-sm font-bold text-slate-700 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-brand-500/20 outline-none cursor-pointer"
