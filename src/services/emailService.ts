@@ -38,6 +38,9 @@ export const emailService = {
       if (contentType && contentType.includes('application/json')) {
         const errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
+        if (errorData.details) {
+          errorMessage += ` Detalhes: ${JSON.stringify(errorData.details)}`;
+        }
       } else {
         const text = await response.text();
         console.error('Server error response:', text);

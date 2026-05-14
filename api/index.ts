@@ -1,6 +1,7 @@
 import express from "express";
 import nodemailer from "nodemailer";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
 import path from "path";
 import "dotenv/config";
@@ -8,11 +9,7 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 
 const app = express();
-
-// Security Headers - Temporarily disabled to troubleshoot Vite integration
-// app.use(helmet({
-//   contentSecurityPolicy: false, // Vite handles CSP in dev
-// }));
+let firestoreDb: any = null;
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -27,35 +24,48 @@ app.use(express.json());
 // Initialize Firebase Admin
 try {
   if (admin.apps.length === 0) {
+    let serviceAccount: any = null;
+    let databaseId = "(default)";
+
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-        
-        // Fix for private key newlines in environment variables
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
         if (serviceAccount.private_key) {
           serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
         }
-
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
-        });
-        console.log("[Firebase Admin] Inicializado com Service Account Key do ambiente.");
       } catch (parseError) {
         console.error("[Firebase Admin] Erro ao processar FIREBASE_SERVICE_ACCOUNT_KEY:", parseError);
-        throw parseError;
-      }
-    } else {
-      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-        admin.initializeApp({
-          projectId: config.projectId,
-        });
-        console.log("[Firebase Admin] Inicializado via arquivo de configuração.");
-      } else {
-        console.warn("[Firebase Admin] Nenhuma configuração encontrada (env ou arquivo).");
       }
     }
+
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    let config: any = null;
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      databaseId = config.firestoreDatabaseId || "(default)";
+    }
+
+    if (serviceAccount) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id
+      });
+      console.log("[Firebase Admin] Inicializado com Service Account Key.");
+    } else if (config) {
+      admin.initializeApp({
+        projectId: config.projectId,
+      });
+      console.log("[Firebase Admin] Inicializado via arquivo de configuração.");
+    } else {
+      admin.initializeApp();
+      console.log("[Firebase Admin] Inicializado com default credentials.");
+    }
+
+    // Initialize Firestore with specific databaseId
+    firestoreDb = getFirestore(admin.app(), databaseId);
+    console.log(`[Firebase Admin] Firestore configurado para database: ${databaseId}`);
+  } else {
+    firestoreDb = getFirestore(admin.app());
   }
 } catch (error) {
   console.error("[Firebase Admin] Erro crítico na inicialização:", error);
@@ -65,15 +75,6 @@ try {
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
-});
-
-// Global error handlers for Node.js
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('[Server] Uncaught Exception:', error);
 });
 
 // Global error handlers for Node.js
@@ -99,21 +100,52 @@ const authenticate = async (req: any, res: any, next: any) => {
   }
 
   try {
+    console.log(`[Auth] Verificando token para ${req.method} ${req.path}`);
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     req.user = decodedToken;
+    console.log(`[Auth] Token verificado para: ${decodedToken.email || decodedToken.uid}`);
     
     // Check role in Firestore
-    const userDoc = await admin.firestore().collection("users").doc(decodedToken.uid).get();
-    req.userData = userDoc.exists ? userDoc.data() : null;
+    try {
+      if (firestoreDb) {
+        const userDoc = await firestoreDb.collection("users").doc(decodedToken.uid).get();
+        req.userData = userDoc.exists ? userDoc.data() : null;
+      } else {
+        console.warn("[Auth] firestoreDb não inicializado, pulando busca de userData");
+        req.userData = null;
+      }
+    } catch (firestoreError: any) {
+      console.error(`[Auth] Erro ao buscar usuário no Firestore (${decodedToken.uid}):`, firestoreError);
+      // Don't block the whole request if Firestore fails, but log it
+      // unless it's a critical error. NOT_FOUND (5) here means the database or collection is missing.
+      req.userData = null;
+    }
     
     const bootstrapAdmins = (process.env.BOOTSTRAP_ADMINS || "").split(",").map(e => e.trim().toLowerCase());
     req.isAdmin = req.userData?.role === "Administrador" || 
                   (decodedToken.email && bootstrapAdmins.includes(decodedToken.email.toLowerCase()));
     
     next();
-  } catch (error) {
-    console.error("[Auth] Token inválido:", error);
-    res.status(401).json({ error: "Sessão inválida ou expirada." });
+  } catch (error: any) {
+    console.error(`[Auth] Erro na verificação geral (${req.method} ${req.path}):`, error);
+    
+    let errorMessage = "Sessão inválida ou expirada.";
+    let details = error.message || String(error);
+    
+    // Help identify specific Firebase Auth errors
+    if (error.code === 'auth/id-token-expired') {
+      errorMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+    } else if (error.code === 'auth/argument-error') {
+      errorMessage = "Token de autenticação malformado.";
+    } else if (error.code === 'auth/internal-error') {
+      errorMessage = "Erro interno no servidor de autenticação.";
+    }
+
+    res.status(401).json({ 
+      error: errorMessage,
+      details: details,
+      code: error.code
+    });
   }
 };
 
@@ -193,8 +225,16 @@ apiRouter.post("/send-email", authenticate, async (req, res) => {
       console.log(`[Email] Concluído. Sucesso: ${successCount}/${to.length}`);
       
       if (successCount === 0 && to.length > 0) {
+        let finalError = "Falha ao enviar todos os e-mails.";
+        
+        // Check if it's the Gmail App Password error
+        const firstError = results[0]?.error;
+        if (firstError && firstError.includes('534-5.7.9')) {
+          finalError = "Erro de Autenticação Gmail: Uma 'Senha de App' é obrigatória porque sua conta tem Verificação em Duas Etapas ativada.";
+        }
+
         return res.status(500).json({ 
-          error: "Falha ao enviar todos os e-mails.",
+          error: finalError,
           details: results
         });
       }

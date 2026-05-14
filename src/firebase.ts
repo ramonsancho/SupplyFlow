@@ -98,7 +98,8 @@ export function formatCurrency(value: number | undefined | null, currency: 'BRL'
 
 export async function getAuthToken(): Promise<string | null> {
   if (!auth.currentUser) return null;
-  return await auth.currentUser.getIdToken();
+  // Use forceRefresh: true to ensure we always have a valid token when calling the backend
+  return await auth.currentUser.getIdToken(true);
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {

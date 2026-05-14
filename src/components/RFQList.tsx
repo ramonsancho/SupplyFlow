@@ -227,7 +227,8 @@ export default function RFQList() {
       await addLog('Enviou RFQ por Email', 'RFQ', id, auth.currentUser?.email || 'Unknown');
     } catch (error) {
       console.error('Error sending RFQ emails:', error);
-      await addNotification('Erro', error instanceof Error ? error.message : 'Não foi possível enviar a cotação por email.', 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Não foi possível enviar a cotação por email.';
+      await addNotification('Erro', errorMessage, 'error');
     }
   };
 
