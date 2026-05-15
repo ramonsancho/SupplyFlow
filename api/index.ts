@@ -71,9 +71,13 @@ try {
   console.error("[Firebase Admin] Erro crítico na inicialização:", error);
 }
 
-// Logger de requisições global
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+// Logger de requisições API
+app.use("/api", (req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+  });
   next();
 });
 

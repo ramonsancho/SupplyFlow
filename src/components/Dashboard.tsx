@@ -316,6 +316,10 @@ export default function Dashboard() {
     );
 
     if (monthIndex !== -1) {
+      // Check if there is an associated valid PO (not cancelled)
+      const associatedPO = pos.find(p => p.proposalId && proposals.some(prop => prop.rfqId === rfq.id && prop.id === p.proposalId));
+      if (associatedPO && associatedPO.status === 'cancelled') return;
+
       const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
       const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
       

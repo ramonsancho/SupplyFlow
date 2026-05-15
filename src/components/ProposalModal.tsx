@@ -28,7 +28,7 @@ type ProposalFormData = z.infer<typeof proposalSchema>;
 interface ProposalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: ProposalFormData & { supplierName: string }) => void;
+  onSubmit: (data: ProposalFormData & { supplierName: string; currency: string; totalValue: number }) => void;
   rfq: RFQ;
 }
 
