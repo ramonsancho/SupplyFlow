@@ -127,6 +127,9 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         deliveryDate: proposal.deliveryDate,
         status: 'pending_approval',
         totalAmount: totalAmount,
+        discountValue: proposal.discountValue || 0,
+        freightValue: proposal.freightValue || 0,
+        taxValue: proposal.taxValue || 0,
         currency: rfq.currency || 'BRL',
         receivedAmount: 0,
         items: (proposal.items || []).map(item => ({

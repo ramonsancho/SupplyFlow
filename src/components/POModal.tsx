@@ -13,6 +13,9 @@ const poSchema = z.object({
   deliveryDate: z.string().min(1, 'Data de entrega obrigatória'),
   status: z.enum(['draft', 'pending_approval', 'approved', 'sent', 'received', 'closed', 'cancelled']),
   currency: z.enum(['BRL', 'USD', 'EUR']),
+  discountValue: z.number(),
+  freightValue: z.number(),
+  taxValue: z.number(),
   items: z.array(z.object({
     id: z.string().optional(),
     description: z.string().min(3, 'Descrição obrigatória'),
@@ -45,6 +48,9 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
       deliveryDate: initialData?.deliveryDate || '',
       status: initialData?.status || 'draft',
       currency: initialData?.currency || 'BRL',
+      discountValue: initialData?.discountValue || 0,
+      freightValue: initialData?.freightValue || 0,
+      taxValue: initialData?.taxValue || 0,
       items: initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }],
     }
   });
@@ -58,6 +64,9 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
         deliveryDate: initialData?.deliveryDate || '',
         status: initialData?.status || 'draft',
         currency: initialData?.currency || 'BRL',
+        discountValue: initialData?.discountValue || 0,
+        freightValue: initialData?.freightValue || 0,
+        taxValue: initialData?.taxValue || 0,
         items: (initialData?.items || [{ description: '', quantity: 1, unit: 'un', unitPrice: 0, tax: 0 }]).map(item => ({
           ...item,
           id: (item as any).id || crypto.randomUUID()
@@ -106,7 +115,12 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
   });
 
   const items = watch('items') || [];
-  const total = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice) + item.tax, 0);
+  const discountValue = watch('discountValue') || 0;
+  const freightValue = watch('freightValue') || 0;
+  const taxValue = watch('taxValue') || 0;
+
+  const subtotal = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice) + (item.tax || 0), 0);
+  const total = subtotal + freightValue + taxValue - discountValue;
 
   if (!isOpen) return null;
 
@@ -132,7 +146,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
               <p className="text-sm font-bold">{validationError || "Por favor, verifique os campos obrigatórios."}</p>
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Fornecedor</label>
               <select 
@@ -187,6 +201,45 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
                     <span className="text-sm font-bold text-slate-600 group-hover:text-[#141414] transition-colors">{curr}</span>
                   </label>
                 ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Desconto Global</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
+                <input 
+                  type="number"
+                  step="0.01"
+                  {...register('discountValue', { valueAsNumber: true })}
+                  className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Frete</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="number"
+                  step="0.01"
+                  {...register('freightValue', { valueAsNumber: true })}
+                  className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impostos (Global)</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="number"
+                  step="0.01"
+                  {...register('taxValue', { valueAsNumber: true })}
+                  className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                />
               </div>
             </div>
           </div>

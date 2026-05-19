@@ -77,6 +77,9 @@ export type PurchaseOrder = {
   family?: string;
   status: 'draft' | 'pending_approval' | 'approved' | 'sent' | 'received' | 'closed' | 'cancelled';
   totalAmount: number;
+  discountValue?: number;
+  freightValue?: number;
+  taxValue?: number;
   originalAmount?: number; // Pre-negotiation or reference amount for savings calculation
   receivedAmount: number;
   receipts?: Receipt[];

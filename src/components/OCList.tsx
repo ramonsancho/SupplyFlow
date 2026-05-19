@@ -234,7 +234,8 @@ export default function OCList() {
     try {
       const poNumber = await poService.getNextPONumber();
       const supplier = suppliers.find(s => s.id === data.supplierId);
-      const totalAmount = Math.round(data.items.reduce((acc: number, i: any) => acc + (i.quantity * i.unitPrice) + (i.tax || 0), 0) * 100) / 100;
+      const itemsAmount = data.items.reduce((acc: number, i: any) => acc + (i.quantity * i.unitPrice) + (i.tax || 0), 0);
+      const totalAmount = Math.round((itemsAmount + (data.freightValue || 0) + (data.taxValue || 0) - (data.discountValue || 0)) * 100) / 100;
       
       const poPayload = {
         ...data,
@@ -242,6 +243,9 @@ export default function OCList() {
         supplierName: supplier?.name || 'Fornecedor Desconhecido',
         receivedAmount: 0,
         totalAmount,
+        discountValue: data.discountValue || 0,
+        freightValue: data.freightValue || 0,
+        taxValue: data.taxValue || 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         revision: 0,
@@ -379,7 +383,7 @@ export default function OCList() {
     }
   };
 
-  const handleEditAmount = async (newAmount: number, items?: any[], deliveryDate?: string) => {
+  const handleEditAmount = async (newAmount: number, items?: any[], deliveryDate?: string, extras?: { discountValue?: number, freightValue?: number, taxValue?: number }) => {
     if (!selectedPO) return;
 
     try {
@@ -397,6 +401,12 @@ export default function OCList() {
       
       if (deliveryDate) {
         updateData.deliveryDate = deliveryDate;
+      }
+
+      if (extras) {
+        if (extras.discountValue !== undefined) updateData.discountValue = extras.discountValue;
+        if (extras.freightValue !== undefined) updateData.freightValue = extras.freightValue;
+        if (extras.taxValue !== undefined) updateData.taxValue = extras.taxValue;
       }
 
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
@@ -605,9 +615,33 @@ export default function OCList() {
 
     const finalY = (doc as any).lastAutoTable.finalY || 150;
 
+    // Summary lines
+    let currentSummaryY = finalY + 10;
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+
+    if (po.taxValue && po.taxValue > 0) {
+      doc.text(`Impostos: ${formatCurrency(po.taxValue, po.currency)}`, 200, currentSummaryY, { align: 'right' });
+      currentSummaryY += 6;
+    }
+
+    if (po.freightValue && po.freightValue > 0) {
+      doc.text(`Frete: ${formatCurrency(po.freightValue, po.currency)}`, 200, currentSummaryY, { align: 'right' });
+      currentSummaryY += 6;
+    }
+
+    if (po.discountValue && po.discountValue > 0) {
+      doc.setTextColor(0, 150, 0); // Green for discount
+      doc.text(`Desconto: - ${formatCurrency(po.discountValue, po.currency)}`, 200, currentSummaryY, { align: 'right' });
+      currentSummaryY += 6;
+      doc.setTextColor(20, 20, 20); // Reset color
+    }
+
     // Total
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`TOTAL DA ORDEM: ${formatCurrency(po.totalAmount, po.currency)}`, 140, finalY + 15);
+    doc.text(`TOTAL DA ORDEM: ${formatCurrency(po.totalAmount, po.currency)}`, 200, currentSummaryY + 4, { align: 'right' });
 
     // Created and Approved Info
     doc.setFontSize(9);

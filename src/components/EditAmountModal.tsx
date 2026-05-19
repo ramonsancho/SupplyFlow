@@ -15,6 +15,9 @@ const editAmountSchema = z.object({
     unitPrice: z.number().min(0, 'Preço deve ser positivo'),
     tax: z.number().min(0, 'Imposto deve ser positivo'),
   })),
+  discountValue: z.number().min(0).optional(),
+  freightValue: z.number().min(0).optional(),
+  taxValue: z.number().min(0).optional(),
   totalAmount: z.number().min(0, 'O valor deve ser positivo'),
   deliveryDate: z.string().min(1, 'Prazo de entrega é obrigatório'),
 });
@@ -24,7 +27,7 @@ type EditAmountFormData = z.infer<typeof editAmountSchema>;
 interface EditAmountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (newAmount: number, items: POItem[], deliveryDate: string) => void;
+  onSubmit: (newAmount: number, items: POItem[], deliveryDate: string, extras?: { discountValue?: number, freightValue?: number, taxValue?: number }) => void;
   po: PurchaseOrder | null;
 }
 
@@ -33,6 +36,9 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
     resolver: zodResolver(editAmountSchema),
     defaultValues: {
       items: po?.items || [],
+      discountValue: po?.discountValue || 0,
+      freightValue: po?.freightValue || 0,
+      taxValue: po?.taxValue || 0,
       totalAmount: po?.totalAmount || 0,
       deliveryDate: po?.deliveryDate || '',
     }
@@ -44,6 +50,9 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
   });
 
   const watchedItems = watch("items");
+  const watchedDiscount = watch("discountValue") || 0;
+  const watchedFreight = watch("freightValue") || 0;
+  const watchedTax = watch("taxValue") || 0;
 
   React.useEffect(() => {
     if (isOpen && po) {
@@ -60,6 +69,9 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
 
       reset({ 
         items: itemsWithIds,
+        discountValue: po.discountValue || 0,
+        freightValue: po.freightValue || 0,
+        taxValue: po.taxValue || 0,
         totalAmount: po.totalAmount,
         deliveryDate: po.deliveryDate || ''
       });
@@ -67,12 +79,12 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
   }, [isOpen, po, reset]);
 
   // Recalculate total on the fly for display and submission
-  const calculatedTotal = watchedItems?.reduce((acc, item) => {
+  const calculatedTotal = (watchedItems?.reduce((acc, item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
     const tax = Number(item.tax) || 0;
     return acc + (qty * price) + tax;
-  }, 0) || 0;
+  }, 0) || 0) + watchedFreight + watchedTax - watchedDiscount;
 
   if (!isOpen || !po) return null;
 
@@ -91,7 +103,11 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
 
         <form 
           onSubmit={handleSubmit(
-            (data) => onSubmit(calculatedTotal, data.items as POItem[], data.deliveryDate),
+            (data) => onSubmit(calculatedTotal, data.items as POItem[], data.deliveryDate, {
+              discountValue: data.discountValue,
+              freightValue: data.freightValue,
+              taxValue: data.taxValue
+            }),
             (err) => console.error("Validation errors:", err)
           )} 
           className="flex-1 overflow-y-auto p-8 space-y-6"
@@ -103,7 +119,7 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest ml-1">Prazo de Entrega</label>
               <input 
@@ -112,6 +128,36 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
                 className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
               />
               {errors.deliveryDate && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1">{errors.deliveryDate.message}</p>}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest ml-1">Desconto</label>
+              <input 
+                type="number"
+                step="0.01"
+                {...register('discountValue', { valueAsNumber: true })}
+                className="w-full px-4 py-3 bg-emerald-50 text-emerald-700 font-bold border-none rounded-xl focus:ring-2 focus:ring-emerald-500 transition-all"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest ml-1">Frete</label>
+              <input 
+                type="number"
+                step="0.01"
+                {...register('freightValue', { valueAsNumber: true })}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest ml-1">Imp. Global</label>
+              <input 
+                type="number"
+                step="0.01"
+                {...register('taxValue', { valueAsNumber: true })}
+                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
+              />
             </div>
           </div>
 
