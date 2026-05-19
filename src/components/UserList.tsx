@@ -294,10 +294,11 @@ export default function UserList() {
 
   const isPowerUser = () => {
     const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+    if (isBootstrapAdmin(currentEmail)) return true;
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador'].includes(role);
+    return ['administrador', 'aprovador'].includes(role);
   };
 
   return (

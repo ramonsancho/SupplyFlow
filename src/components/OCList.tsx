@@ -276,7 +276,7 @@ export default function OCList() {
   const isBuyer = (role?: string) => {
     if (!role) return false;
     const r = role.toLowerCase();
-    return r === 'comprador' || r === 'compradora';
+    return r === 'comprador';
   };
 
   const isRequisitioner = (role?: string) => {
@@ -285,24 +285,35 @@ export default function OCList() {
     return r === 'requisitante';
   };
 
-  const isPowerUser = () => {
-    const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+  const isPowerUser = (user: User | null) => {
+    if (!user) return false;
+    const currentEmail = user.email?.toLowerCase().trim() || '';
+    if (isBootstrapAdmin(currentEmail)) return true;
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
-    if (!currentUserProfile) return false;
-    const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
+    
+    const role = (user.role || '').toLowerCase().trim();
+    return ['administrador', 'aprovador'].includes(role);
+  };
+
+  const hasApprovalPermission = (user: User | null) => {
+    if (!user) return false;
+    const role = (user.role || '').toLowerCase().trim();
+    return ['administrador', 'aprovador'].includes(role);
   };
 
   const handleApprove = async (po: PurchaseOrder) => {
     if (!currentUserProfile) return;
 
-    if (!isPowerUser()) {
+    if (!hasApprovalPermission(currentUserProfile)) {
       await addNotification('Acesso Negado', 'Você não tem permissão para aprovar ordens de compra.', 'error');
       return;
     }
 
-    if ((currentUserProfile.approvalLimit || 0) < po.totalAmount && currentUserProfile.role !== 'Administrador' && !isPowerUser()) {
-      await addNotification('Limite Insuficiente', `Seu limite de aprovação (R$ ${formatCurrency(currentUserProfile.approvalLimit)}) é inferior ao total da OC.`, 'error');
+    const isSuperAdmin = currentUserProfile.role === 'Administrador' || isBootstrapAdmin(auth.currentUser?.email);
+    const userLimit = currentUserProfile.approvalLimit || 0;
+
+    if (!isSuperAdmin && userLimit < po.totalAmount) {
+      await addNotification('Limite Insuficiente', `Seu limite de aprovação (${formatCurrency(userLimit, po.currency)}) é inferior ao total da OC (${formatCurrency(po.totalAmount, po.currency)}).`, 'error');
       return;
     }
 
@@ -883,7 +894,7 @@ export default function OCList() {
 
               <div className="flex flex-col gap-2 min-w-[280px] self-center">
                 <div className="flex items-center justify-end gap-2">
-                  {currentUserProfile && (currentUserProfile.role === 'Administrador' || currentUserProfile.role === 'Aprovador') && (oc.status === 'pending_approval' || oc.status === 'draft') && (
+                  {currentUserProfile && hasApprovalPermission(currentUserProfile) && (oc.status === 'pending_approval' || oc.status === 'draft') && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
