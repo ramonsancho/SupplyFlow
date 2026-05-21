@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, FileText, Calendar, Tag, CheckCircle2, Clock, AlertCircle, ShoppingCart } from 'lucide-react';
-import { RFQ, Proposal, User, PurchaseOrder } from '../types';
+import { X, Plus, FileText, Calendar, Tag, CheckCircle2, Clock, AlertCircle, ShoppingCart, Trash2 } from 'lucide-react';
+import { RFQ, Proposal, User, PurchaseOrder, ProposalItem } from '../types';
 import { db, auth, handleFirestoreError, OperationType, formatDate, formatCurrency } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy, getDoc, deleteDoc } from 'firebase/firestore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { poService } from '../services/poService';
 import ProposalModal from './ProposalModal';
+import ConfirmModal from './ConfirmModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -26,6 +27,9 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [selectingItemsProposal, setSelectingItemsProposal] = useState<Proposal | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [proposalToDelete, setProposalToDelete] = useState<{ id: string; name: string } | null>(null);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
 
@@ -110,12 +114,13 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     }
   };
 
-  const handleAcceptProposal = async (proposal: Proposal) => {
+  const confirmAcceptProposal = async (proposal: Proposal, selectedItems: ProposalItem[]) => {
     try {
       // 1. Gerar a PO automaticamente com número sequencial
       const poNumber = await poService.getNextPONumber();
       
-      const totalAmount = Math.round(proposal.totalValue * 100) / 100;
+      const subtotal = selectedItems.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
+      const totalAmount = Math.round((subtotal + (proposal.freightValue || 0) + (proposal.taxValue || 0) - (proposal.discountValue || 0)) * 100) / 100;
       
       // Prepare payload manually to avoid stripping serverTimestamp with JSON.stringify
       const poPayload: any = {
@@ -132,7 +137,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         taxValue: proposal.taxValue || 0,
         currency: rfq.currency || 'BRL',
         receivedAmount: 0,
-        items: (proposal.items || []).map(item => ({
+        items: selectedItems.map(item => ({
           id: (item as any).id || crypto.randomUUID(),
           description: item.description,
           quantity: item.quantity,
@@ -175,6 +180,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         console.log(`[Approval] OC #${poNumber} aguardando aprovação.`);
       }
 
+      setSelectingItemsProposal(null);
       onClose();
     } catch (error) {
       try {
@@ -182,6 +188,30 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
       } catch (e) {
         console.error('PO generation error:', e);
         await addNotification('Erro', 'Não foi possível gerar a Ordem de Compra.', 'error');
+      }
+    }
+  };
+
+  const canDeleteProposal = () => {
+    const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || '';
+    if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
+    if (!currentUserProfile) return false;
+    const role = (currentUserProfile.role || '').toLowerCase().trim();
+    return ['administrador', 'comprador'].includes(role);
+  };
+
+  const confirmDeleteProposal = async (proposalId: string, supplierName: string) => {
+    try {
+      await deleteDoc(doc(db, 'proposals', proposalId));
+      await addLog('Excluiu Proposta', 'Proposal', proposalId, auth.currentUser?.email || 'Unknown');
+      await addNotification('Proposta Excluída', `A proposta de ${supplierName} foi excluída com sucesso.`, 'success');
+      setProposalToDelete(null);
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.DELETE, 'proposals');
+      } catch (e) {
+        console.error('Proposal delete error:', e);
+        await addNotification('Erro', 'Não foi possível excluir a proposta.', 'error');
       }
     }
   };
@@ -312,15 +342,33 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                            proposal.status === 'accepted' ? 'Aceita' : 'Rejeitada'}
                         </span>
 
-                         {proposal.status === 'pending' && rfq.status !== 'closed' && isAuthorized() && (
-                          <button 
-                            onClick={() => handleAcceptProposal(proposal).catch(err => console.error('Error in handleAcceptProposal:', err))}
-                            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md"
-                          >
-                            <ShoppingCart size={14} />
-                            <span>ACEITAR E GERAR PO</span>
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {canDeleteProposal() && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProposalToDelete({ id: proposal.id, name: proposal.supplierName });
+                              }}
+                              className="p-2 hover:bg-red-50 text-red-600 rounded-xl transition-all aspect-square border border-transparent hover:border-red-200"
+                              title="Excluir Proposta"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+
+                          {proposal.status === 'pending' && rfq.status !== 'closed' && isAuthorized() && (
+                            <button 
+                              onClick={() => {
+                                setSelectingItemsProposal(proposal);
+                                setSelectedItemIds((proposal.items || []).map((item, idx) => item.id || item.description || idx.toString()));
+                              }}
+                              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md"
+                            >
+                              <ShoppingCart size={14} />
+                              <span>ACEITAR E GERAR PO</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -337,6 +385,178 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         onSubmit={(data) => handleAddProposal(data).catch(err => console.error('Error in handleAddProposal:', err))}
         rfq={rfq}
       />
+
+      {selectingItemsProposal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between bg-[#F5F5F5]">
+              <div>
+                <h4 className="text-lg font-bold text-[#141414]">Selecionar Itens a Aceitar</h4>
+                <p className="text-xs text-[#8E9299] mt-1 font-medium">Proposta de {selectingItemsProposal.supplierName}</p>
+              </div>
+              <button 
+                onClick={() => setSelectingItemsProposal(null)}
+                className="p-1.5 hover:bg-white rounded-full transition-all text-[#8E9299] hover:text-[#141414]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex items-center gap-3 bg-[#F5F5F5] p-3 rounded-xl justify-between">
+                <span className="text-xs font-bold text-[#141414] uppercase tracking-wider">Itens da Proposta</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allKeys = (selectingItemsProposal.items || []).map((item, idx) => item.id || item.description || idx.toString());
+                      setSelectedItemIds(allKeys);
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-wider"
+                  >
+                    Selecionar Tudo
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItemIds([])}
+                    className="text-[10px] font-bold text-red-500 hover:underline uppercase tracking-wider"
+                  >
+                    Limpar Seleção
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                {(selectingItemsProposal.items || []).map((item, idx) => {
+                  const key = item.id || item.description || idx.toString();
+                  const isSelected = selectedItemIds.includes(key);
+                  return (
+                    <div 
+                      key={key}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedItemIds(selectedItemIds.filter(id => id !== key));
+                        } else {
+                          setSelectedItemIds([...selectedItemIds, key]);
+                        }
+                      }}
+                      className={cn(
+                        "flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-all hover:bg-slate-50",
+                        isSelected ? "border-[#141414] bg-slate-50/50" : "border-[#E5E5E5]"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}} // Handled by div click
+                        className="w-4 h-4 text-[#141414] border-slate-300 rounded focus:ring-[#141414]"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-[#141414] truncate">{item.description}</p>
+                        <p className="text-xs text-[#8E9299]">Qtd: {item.quantity} {item.unit} &bull; Unitário: {formatCurrency(item.unitPrice, rfq.currency)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-[#141414]">
+                          {formatCurrency(item.quantity * item.unitPrice, rfq.currency)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectedItemIds.length === 0 && (
+                <div className="p-4 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl flex items-start gap-2.5 animate-pulse">
+                  <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                  <p className="text-xs font-medium">Por favor, selecione pelo menos um item para poder gerar a ordem de compra.</p>
+                </div>
+              )}
+
+              {/* Value summary */}
+              {selectedItemIds.length > 0 && (() => {
+                const selectedItems = (selectingItemsProposal.items || []).filter((item, idx) => 
+                  selectedItemIds.includes(item.id || item.description || idx.toString())
+                );
+                const itemsSubtotal = selectedItems.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
+                
+                const discount = selectingItemsProposal.discountValue || 0;
+                const tax = selectingItemsProposal.taxValue || 0;
+                const freight = selectingItemsProposal.freightValue || 0;
+                const total = itemsSubtotal + tax + freight - discount;
+
+                return (
+                  <div className="bg-[#F5F5F5] p-4 rounded-xl space-y-2 text-sm font-medium">
+                    <div className="flex justify-between text-[#8E9299]">
+                      <span>Subtotal selecionado:</span>
+                      <span className="font-bold text-[#141414]">{formatCurrency(itemsSubtotal, rfq.currency)}</span>
+                    </div>
+                    {tax > 0 && (
+                      <div className="flex justify-between text-[#8E9299]">
+                        <span>Impostos:</span>
+                        <span className="font-bold text-[#141414]">{formatCurrency(tax, rfq.currency)}</span>
+                      </div>
+                    )}
+                    {freight > 0 && (
+                      <div className="flex justify-between text-[#8E9299]">
+                        <span>Frete:</span>
+                        <span className="font-bold text-[#141414]">{formatCurrency(freight, rfq.currency)}</span>
+                      </div>
+                    )}
+                    {discount > 0 && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Desconto:</span>
+                        <span className="font-bold">- {formatCurrency(discount, rfq.currency)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-[#E5E5E5] pt-2 text-normal font-bold text-[#141414]">
+                      <span>Total Estimado da PO:</span>
+                      <span>{formatCurrency(Math.max(0, total), rfq.currency)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="p-6 border-t border-[#E5E5E5] bg-[#F5F5F5] flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectingItemsProposal(null)}
+                className="px-5 py-2.5 bg-white border border-[#E5E5E5] text-sm font-bold text-slate-700 rounded-xl hover:scale-105 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={selectedItemIds.length === 0}
+                onClick={() => {
+                  const selectedItems = (selectingItemsProposal.items || []).filter((item, idx) => 
+                    selectedItemIds.includes(item.id || item.description || idx.toString())
+                  );
+                  confirmAcceptProposal(selectingItemsProposal, selectedItems).catch(err => console.error('Error confirming PO generation:', err));
+                }}
+                className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 disabled:hover:scale-100 uppercase tracking-widest hover:scale-105 transition-all shadow-md"
+              >
+                <ShoppingCart size={16} />
+                <span>Confirmar e Gerar PO</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {proposalToDelete && (
+        <ConfirmModal
+          isOpen={true}
+          onClose={() => setProposalToDelete(null)}
+          onConfirm={() => confirmDeleteProposal(proposalToDelete.id, proposalToDelete.name).catch(err => console.error("Error deleting proposal:", err))}
+          title="Excluir Proposta"
+          message={`Tem certeza que deseja excluir a proposta de ${proposalToDelete.name}? Esta ação não pode ser desfeita.`}
+          confirmText="Excluir"
+          cancelText="Cancelar"
+          variant="danger"
+        />
+      )}
     </div>
   );
 }
