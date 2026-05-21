@@ -98,7 +98,7 @@ export default function SupplierList() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
       const defaultFamilies = ['Serviços de TI', 'Limpeza', 'Logística de Material'];
-      const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort();
+      const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
       setFamilies(allFamilies);
     }, (error) => {
       try {
@@ -422,7 +422,7 @@ export default function SupplierList() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-10">
-                  {supplier.families.map(family => (
+                  {[...supplier.families].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })).map(family => (
                     <span key={family} className="text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-500 px-3 py-1.5 rounded-xl group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
                       {family}
                     </span>

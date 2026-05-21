@@ -86,7 +86,7 @@ export default function ContractModal({ isOpen, onClose, onSubmit, initialData }
                 <label className="text-xs font-bold text-[#8E9299] uppercase tracking-widest">Fornecedor</label>
                 {selectedSupplier && (
                   <div className="flex flex-wrap gap-1">
-                    {selectedSupplier.families.map((family) => (
+                    {[...selectedSupplier.families].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })).map((family) => (
                       <span 
                         key={family} 
                         className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#F5F5F5] text-[#8E9299] rounded text-[8px] font-bold uppercase tracking-tighter"

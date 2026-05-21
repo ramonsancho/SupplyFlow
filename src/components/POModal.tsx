@@ -82,7 +82,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
       const defaultFamilies = ['Serviços de TI', 'Limpeza', 'Logística de Material'];
-      const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort();
+      const allFamilies = Array.from(new Set([...defaultFamilies, ...dbFamilies])).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
       setFamilies(allFamilies);
     }, (error) => {
       try {

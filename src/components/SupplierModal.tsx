@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { X, Save, Plus } from 'lucide-react';
 import { Supplier } from '../types';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp, deleteDoc, doc, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp, deleteDoc, doc, getDocs, where, updateDoc } from 'firebase/firestore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -66,7 +66,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbFamilies = snapshot.docs.map(doc => doc.data().name as string);
       // Combine default with DB families, removing duplicates
-      const allFamilies = Array.from(new Set([...DEFAULT_FAMILIES, ...dbFamilies])).sort();
+      const allFamilies = Array.from(new Set([...DEFAULT_FAMILIES, ...dbFamilies])).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
       setFamilies(allFamilies);
     }, (error) => {
       try {
@@ -131,6 +131,18 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
       
       const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, 'families', d.id)));
       await Promise.all(deletePromises);
+      
+      // Also update all suppliers containing this family to remove it
+      const suppliersQuery = query(collection(db, 'suppliers'), where('families', 'array-contains', familyName));
+      const suppliersSnapshot = await getDocs(suppliersQuery);
+      const supplierUpdatePromises = suppliersSnapshot.docs.map(supplierDoc => {
+        const supplierData = supplierDoc.data();
+        const updatedFamilies = (supplierData.families || []).filter((f: string) => f !== familyName);
+        return updateDoc(doc(db, 'suppliers', supplierDoc.id), {
+          families: updatedFamilies
+        });
+      });
+      await Promise.all(supplierUpdatePromises);
       
       // If the deleted family was selected, remove it
       if (selectedFamilies.includes(familyName)) {
