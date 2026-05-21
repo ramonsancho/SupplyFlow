@@ -201,6 +201,13 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
   };
 
   const confirmDeleteProposal = async (proposalId: string, supplierName: string) => {
+    const proposal = proposals.find(p => p.id === proposalId);
+    if (proposal && proposal.status === 'accepted') {
+      await addNotification('Erro', 'Essa proposta já foi aceita. Não é possível exclu-la.', 'error');
+      setProposalToDelete(null);
+      return;
+    }
+
     try {
       await deleteDoc(doc(db, 'proposals', proposalId));
       await addLog('Excluiu Proposta', 'Proposal', proposalId, auth.currentUser?.email || 'Unknown');
@@ -347,6 +354,10 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (proposal.status === 'accepted') {
+                                  addNotification('Erro', 'Essa proposta já foi aceita. Não é possível exclu-la.', 'error');
+                                  return;
+                                }
                                 setProposalToDelete({ id: proposal.id, name: proposal.supplierName });
                               }}
                               className="p-2 hover:bg-red-50 text-red-600 rounded-xl transition-all aspect-square border border-transparent hover:border-red-200"

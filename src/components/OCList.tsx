@@ -742,7 +742,7 @@ export default function OCList() {
           setIsEditAmountModalOpen(false);
           setSelectedPO(null);
         }}
-        onSubmit={(newAmount, items, deliveryDate) => handleEditAmount(newAmount, items, deliveryDate).catch(err => console.error('Error in handleEditAmount:', err))}
+        onSubmit={(newAmount, items, deliveryDate, extras) => handleEditAmount(newAmount, items, deliveryDate, extras).catch(err => console.error('Error in handleEditAmount:', err))}
         po={selectedPO}
       />
 
