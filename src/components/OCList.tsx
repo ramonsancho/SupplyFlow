@@ -404,9 +404,18 @@ export default function OCList() {
       }
 
       if (extras) {
-        if (extras.discountValue !== undefined) updateData.discountValue = extras.discountValue;
-        if (extras.freightValue !== undefined) updateData.freightValue = extras.freightValue;
-        if (extras.taxValue !== undefined) updateData.taxValue = extras.taxValue;
+        if (extras.discountValue !== undefined) {
+          const discount = Number(extras.discountValue);
+          updateData.discountValue = isNaN(discount) ? 0 : discount;
+        }
+        if (extras.freightValue !== undefined) {
+          const freight = Number(extras.freightValue);
+          updateData.freightValue = isNaN(freight) ? 0 : freight;
+        }
+        if (extras.taxValue !== undefined) {
+          const tax = Number(extras.taxValue);
+          updateData.taxValue = isNaN(tax) ? 0 : tax;
+        }
       }
 
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
@@ -621,19 +630,22 @@ export default function OCList() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
 
-    if (po.taxValue && po.taxValue > 0) {
-      doc.text(`Impostos: ${formatCurrency(po.taxValue, po.currency)}`, 200, currentSummaryY, { align: 'right' });
+    const tax = Number(po.taxValue) || 0;
+    if (tax > 0) {
+      doc.text(`Impostos: ${formatCurrency(tax, po.currency)}`, 200, currentSummaryY, { align: 'right' });
       currentSummaryY += 6;
     }
 
-    if (po.freightValue && po.freightValue > 0) {
-      doc.text(`Frete: ${formatCurrency(po.freightValue, po.currency)}`, 200, currentSummaryY, { align: 'right' });
+    const freight = Number(po.freightValue) || 0;
+    if (freight > 0) {
+      doc.text(`Frete: ${formatCurrency(freight, po.currency)}`, 200, currentSummaryY, { align: 'right' });
       currentSummaryY += 6;
     }
 
-    if (po.discountValue && po.discountValue > 0) {
+    const discount = Number(po.discountValue) || 0;
+    if (discount > 0) {
       doc.setTextColor(0, 150, 0); // Green for discount
-      doc.text(`Desconto: - ${formatCurrency(po.discountValue, po.currency)}`, 200, currentSummaryY, { align: 'right' });
+      doc.text(`Desconto: - ${formatCurrency(discount, po.currency)}`, 200, currentSummaryY, { align: 'right' });
       currentSummaryY += 6;
       doc.setTextColor(20, 20, 20); // Reset color
     }

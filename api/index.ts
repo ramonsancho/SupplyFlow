@@ -258,11 +258,18 @@ apiRouter.post("/send-email", authenticate, async (req, res) => {
     }
     
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Email] Erro no transporte SMTP:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    let finalError = "Falha ao enviar e-mail via SMTP.";
+    
+    if (errMsg.includes('534-5.7.9')) {
+      finalError = "Erro de Autenticação Gmail: Uma 'Senha de App' é obrigatória porque sua conta tem Verificação em Duas Etapas ativada.";
+    }
+
     res.status(500).json({ 
-      error: "Falha ao enviar e-mail via SMTP.",
-      message: error instanceof Error ? error.message : String(error)
+      error: finalError,
+      message: errMsg
     });
   }
 });

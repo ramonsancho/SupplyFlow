@@ -15,9 +15,9 @@ const editAmountSchema = z.object({
     unitPrice: z.number().min(0, 'Preço deve ser positivo'),
     tax: z.number().min(0, 'Imposto deve ser positivo'),
   })),
-  discountValue: z.number().min(0).optional(),
-  freightValue: z.number().min(0).optional(),
-  taxValue: z.number().min(0).optional(),
+  discountValue: z.union([z.number().min(0), z.nan()]).optional(),
+  freightValue: z.union([z.number().min(0), z.nan()]).optional(),
+  taxValue: z.union([z.number().min(0), z.nan()]).optional(),
   totalAmount: z.number().min(0, 'O valor deve ser positivo'),
   deliveryDate: z.string().min(1, 'Prazo de entrega é obrigatório'),
 });
@@ -50,9 +50,12 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
   });
 
   const watchedItems = watch("items");
-  const watchedDiscount = watch("discountValue") || 0;
-  const watchedFreight = watch("freightValue") || 0;
-  const watchedTax = watch("taxValue") || 0;
+  const watchedDiscountRaw = watch("discountValue");
+  const watchedDiscount = (watchedDiscountRaw === undefined || watchedDiscountRaw === null || isNaN(Number(watchedDiscountRaw))) ? 0 : Number(watchedDiscountRaw);
+  const watchedFreightRaw = watch("freightValue");
+  const watchedFreight = (watchedFreightRaw === undefined || watchedFreightRaw === null || isNaN(Number(watchedFreightRaw))) ? 0 : Number(watchedFreightRaw);
+  const watchedTaxRaw = watch("taxValue");
+  const watchedTax = (watchedTaxRaw === undefined || watchedTaxRaw === null || isNaN(Number(watchedTaxRaw))) ? 0 : Number(watchedTaxRaw);
 
   React.useEffect(() => {
     if (isOpen && po) {
@@ -103,11 +106,16 @@ export default function EditAmountModal({ isOpen, onClose, onSubmit, po }: EditA
 
         <form 
           onSubmit={handleSubmit(
-            (data) => onSubmit(calculatedTotal, data.items as POItem[], data.deliveryDate, {
-              discountValue: data.discountValue,
-              freightValue: data.freightValue,
-              taxValue: data.taxValue
-            }),
+            (data) => {
+              const dVal = data.discountValue;
+              const fVal = data.freightValue;
+              const tVal = data.taxValue;
+              onSubmit(calculatedTotal, data.items as POItem[], data.deliveryDate, {
+                discountValue: (dVal === undefined || dVal === null || isNaN(dVal)) ? 0 : dVal,
+                freightValue: (fVal === undefined || fVal === null || isNaN(fVal)) ? 0 : fVal,
+                taxValue: (tVal === undefined || tVal === null || isNaN(tVal)) ? 0 : tVal
+              });
+            },
             (err) => console.error("Validation errors:", err)
           )} 
           className="flex-1 overflow-y-auto p-8 space-y-6"
