@@ -231,10 +231,14 @@ apiRouter.post("/send-email", authenticate, async (req, res) => {
       if (successCount === 0 && to.length > 0) {
         let finalError = "Falha ao enviar todos os e-mails.";
         
-        // Check if it's the Gmail App Password error
+        // Check if it's the Gmail App Password or invalid credentials error
         const firstError = results[0]?.error;
-        if (firstError && firstError.includes('534-5.7.9')) {
-          finalError = "Erro de Autenticação Gmail: Uma 'Senha de App' é obrigatória porque sua conta tem Verificação em Duas Etapas ativada.";
+        if (firstError) {
+          if (firstError.includes('534-5.7.9')) {
+            finalError = "Erro de Autenticação Gmail: Uma 'Senha de App' é obrigatória porque sua conta tem Verificação em Duas Etapas ativada.";
+          } else if (firstError.includes('535-5.7.8')) {
+            finalError = "Erro de Autenticação SMTP: Usuário ou Senha inválidos. Verifique suas credenciais de e-mail ou se a sua 'Senha de App' está correta e tente novamente.";
+          }
         }
 
         return res.status(500).json({ 

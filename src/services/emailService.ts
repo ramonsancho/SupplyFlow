@@ -38,7 +38,8 @@ export const emailService = {
       if (contentType && contentType.includes('application/json')) {
         const errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
-        if (errorData.details) {
+        const isAuthError = errorMessage.includes("Autenticação Gmail") || errorMessage.includes("Autenticação SMTP");
+        if (errorData.details && !isAuthError) {
           errorMessage += ` Detalhes: ${JSON.stringify(errorData.details)}`;
         }
       } else {
