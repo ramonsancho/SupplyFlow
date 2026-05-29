@@ -173,10 +173,17 @@ export default function Dashboard() {
   // Calculate KPIs
   const totalSpent = filteredPOs.reduce((acc, po) => acc + (po.totalAmount || 0), 0);
   
-  const totalSavings = filteredRFQs.reduce((acc, rfq) => {
-    // Check if there is an associated valid PO (not cancelled)
+  let computedSavings = 0;
+  const rfqAssociatedPOIds = new Set<string>();
+
+  filteredRFQs.forEach(rfq => {
+    // Check if there is an associated valid PO (not cancelled or draft)
     const associatedPO = pos.find(p => p.proposalId && proposals.some(prop => prop.rfqId === rfq.id && prop.id === p.proposalId));
-    if (associatedPO && associatedPO.status === 'cancelled') return acc;
+    if (associatedPO && (associatedPO.status === 'cancelled' || associatedPO.status === 'draft')) return;
+
+    if (associatedPO) {
+      rfqAssociatedPOIds.add(associatedPO.id);
+    }
 
     const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
     const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
@@ -184,8 +191,13 @@ export default function Dashboard() {
     let rfqSavings = 0;
 
     if (acceptedProposal) {
-      // Add explicit discount
-      rfqSavings += (acceptedProposal.discountValue || 0);
+      // Use actual PO's global discount if it exists and is valid, otherwise use proposal's discount
+      const poDiscount = associatedPO?.discountValue;
+      const discount = (poDiscount !== undefined && poDiscount !== null && !isNaN(poDiscount))
+        ? Number(poDiscount)
+        : (acceptedProposal.discountValue || 0);
+
+      rfqSavings += discount;
 
       // Add market savings (if multiple bidders)
       if (rfqProposals.length >= 2) {
@@ -207,8 +219,22 @@ export default function Dashboard() {
       }
     }
     
-    return acc + (isNaN(rfqSavings) ? 0 : Math.max(0, rfqSavings));
-  }, 0);
+    if (!isNaN(rfqSavings) && rfqSavings > 0) {
+      computedSavings += rfqSavings;
+    }
+  });
+
+  // Add discounts from direct (manual) filtered Purchase Orders that are not associated with any RFQ
+  filteredPOs.forEach(po => {
+    if (!rfqAssociatedPOIds.has(po.id)) {
+      const discount = Number(po.discountValue) || 0;
+      if (discount > 0 && !isNaN(discount)) {
+        computedSavings += discount;
+      }
+    }
+  });
+
+  const totalSavings = computedSavings;
 
   const openPOsCount = filteredPOs.filter(po => po.status !== 'received' && po.status !== 'closed').length;
   
@@ -307,6 +333,8 @@ export default function Dashboard() {
     }
   });
 
+  const rfqAssociatedPOIdsForMonthly = new Set<string>();
+
   rfqs.forEach(rfq => {
     const rfqDate = rfq.createdAt ? new Date(rfq.createdAt) : null;
     if (!rfqDate || isNaN(rfqDate.getTime())) return;
@@ -316,16 +344,25 @@ export default function Dashboard() {
     );
 
     if (monthIndex !== -1) {
-      // Check if there is an associated valid PO (not cancelled)
+      // Check if there is an associated valid PO (not cancelled or draft)
       const associatedPO = pos.find(p => p.proposalId && proposals.some(prop => prop.rfqId === rfq.id && prop.id === p.proposalId));
-      if (associatedPO && associatedPO.status === 'cancelled') return;
+      if (associatedPO && (associatedPO.status === 'cancelled' || associatedPO.status === 'draft')) return;
+
+      if (associatedPO) {
+        rfqAssociatedPOIdsForMonthly.add(associatedPO.id);
+      }
 
       const rfqProposals = proposals.filter(p => p.rfqId === rfq.id);
       const acceptedProposal = rfqProposals.find(p => p.status === 'accepted');
       
       let rfqSavings = 0;
       if (acceptedProposal) {
-        rfqSavings += (acceptedProposal.discountValue || 0);
+        const poDiscount = associatedPO?.discountValue;
+        const discount = (poDiscount !== undefined && poDiscount !== null && !isNaN(poDiscount))
+          ? Number(poDiscount)
+          : (acceptedProposal.discountValue || 0);
+        
+        rfqSavings += discount;
 
         if (rfqProposals.length >= 2) {
           const acceptedPriceBeforeDiscount = (acceptedProposal.totalValue || 0) + (acceptedProposal.discountValue || 0);
@@ -343,8 +380,29 @@ export default function Dashboard() {
           }
         }
         
-        if (!isNaN(rfqSavings)) {
-          monthlyHistory[monthIndex].savings += Math.max(0, rfqSavings);
+        if (!isNaN(rfqSavings) && rfqSavings > 0) {
+          monthlyHistory[monthIndex].savings += rfqSavings;
+        }
+      }
+    }
+  });
+
+  // Add discounts from direct (manual) Purchase Orders that are not associated with any RFQ
+  pos.forEach(po => {
+    if (po.status === 'cancelled' || po.status === 'draft') return;
+    if (!po.createdAt) return;
+
+    const poDate = new Date(po.createdAt);
+    if (isNaN(poDate.getTime())) return;
+
+    if (!rfqAssociatedPOIdsForMonthly.has(po.id)) {
+      const discount = Number(po.discountValue) || 0;
+      if (discount > 0 && !isNaN(discount)) {
+        const monthIndex = monthlyHistory.findIndex(m => 
+          m.month === poDate.getMonth() && m.year === poDate.getFullYear()
+        );
+        if (monthIndex !== -1) {
+          monthlyHistory[monthIndex].savings += discount;
         }
       }
     }
