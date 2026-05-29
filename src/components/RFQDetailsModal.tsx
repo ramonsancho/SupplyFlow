@@ -33,6 +33,8 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
 
+  const isRfqClosed = rfq.status === 'closed' || proposals.some(p => p.status === 'accepted');
+
   useEffect(() => {
     const qUsers = query(collection(db, 'users'));
     const unsubscribeAllUsers = onSnapshot(qUsers, (snapshot) => {
@@ -367,7 +369,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
                             </button>
                           )}
 
-                          {proposal.status === 'pending' && rfq.status !== 'closed' && isAuthorized() && (
+                          {proposal.status === 'pending' && !isRfqClosed && isAuthorized() && (
                             <button 
                               onClick={() => {
                                 setSelectingItemsProposal(proposal);

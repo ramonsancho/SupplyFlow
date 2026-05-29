@@ -21,7 +21,7 @@ import {
 import RFQModal from './RFQModal';
 import ConfirmModal from './ConfirmModal';
 import RFQDetailsModal from './RFQDetailsModal';
-import { RFQ, User } from '../types';
+import { RFQ, User, Proposal } from '../types';
 import { emailService } from '../services/emailService';
 import { db, auth, handleFirestoreError, OperationType, formatDate } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -50,8 +50,29 @@ export default function RFQList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
   const { addNotification } = useNotifications();
   const { addLog } = useAuditLog();
+
+  useEffect(() => {
+    const q = query(collection(db, 'proposals'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const proposalData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Proposal[];
+      setProposals(proposalData);
+    }, (error) => {
+      console.error('Error fetching proposals in RFQList:', error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const getEffectiveStatus = (rfq: RFQ) => {
+    const hasAccepted = proposals.some(p => p.rfqId === rfq.id && p.status === 'accepted');
+    if (hasAccepted) return 'closed';
+    return rfq.status;
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'rfqs'), orderBy('createdAt', 'desc'));
@@ -326,7 +347,7 @@ export default function RFQList() {
   const filteredRfqs = rfqs.filter(rfq => {
     const matchesSearch = rfq.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          rfq.number.toString().includes(searchTerm);
-    const matchesStatus = filterStatus === null || rfq.status === filterStatus;
+    const matchesStatus = filterStatus === null || getEffectiveStatus(rfq) === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -412,13 +433,16 @@ export default function RFQList() {
         variant="info"
       />
 
-      {selectedRFQ && (
-        <RFQDetailsModal 
-          isOpen={!!selectedRFQ}
-          onClose={() => setSelectedRFQ(null)}
-          rfq={selectedRFQ}
-        />
-      )}
+      {selectedRFQ && (() => {
+        const freshRFQ = rfqs.find(r => r.id === selectedRFQ.id) || selectedRFQ;
+        return (
+          <RFQDetailsModal 
+            isOpen={!!selectedRFQ}
+            onClose={() => setSelectedRFQ(null)}
+            rfq={freshRFQ}
+          />
+        );
+      })()}
 
       {/* Filters Bar */}
       <div className="space-y-4">
@@ -545,9 +569,9 @@ export default function RFQList() {
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className={cn("inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent", getStatusColor(rfq.status))}>
-                        {getStatusIcon(rfq.status)}
-                        <span>{rfq.status}</span>
+                      <div className={cn("inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent", getStatusColor(getEffectiveStatus(rfq)))}>
+                        {getStatusIcon(getEffectiveStatus(rfq))}
+                        <span>{getEffectiveStatus(rfq)}</span>
                       </div>
                     </td>
                     <td className="px-8 py-6">
@@ -592,11 +616,11 @@ export default function RFQList() {
                               }}
                               className={cn(
                                 "p-3 rounded-2xl transition-all duration-300",
-                                rfq.status === 'sent' 
+                                getEffectiveStatus(rfq) === 'sent' 
                                   ? "text-emerald-600 bg-emerald-50" 
                                   : "text-brand-600 bg-brand-50 hover:bg-brand-100"
                               )}
-                              title={rfq.status === 'sent' ? "Reenviar para Fornecedores" : "Disparar para Fornecedores"}
+                              title={getEffectiveStatus(rfq) === 'sent' ? "Reenviar para Fornecedores" : "Disparar para Fornecedores"}
                             >
                               <Send size={18} />
                             </motion.button>
