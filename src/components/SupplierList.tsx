@@ -113,6 +113,30 @@ export default function SupplierList() {
 
   const handleSaveSupplier = async (data: any) => {
     try {
+      const cleanDoc = (d: string) => {
+        if (!d) return '';
+        const cleaned = d.replace(/\D/g, '');
+        return cleaned.length > 0 ? cleaned : d.trim().toLowerCase();
+      };
+
+      const isEditing = !!editingSupplier;
+      const documentClean = cleanDoc(data.document);
+      const nameClean = data.name ? data.name.trim().toLowerCase() : '';
+
+      const exists = suppliers.some(s => {
+        if (isEditing && s.id === editingSupplier.id) return false;
+        
+        const sDocClean = cleanDoc(s.document);
+        const sNameClean = s.name ? s.name.trim().toLowerCase() : '';
+        
+        return sNameClean === nameClean || (documentClean && sDocClean && sDocClean === documentClean);
+      });
+
+      if (exists) {
+        await addNotification('Erro', 'NÃO FOI POSSÍVEL COMPLETAR ESSA AÇÃO. EMPRESA JÁ CADASTRADA', 'error');
+        return;
+      }
+
       if (editingSupplier) {
         const supplierRef = doc(db, 'suppliers', editingSupplier.id);
         await updateDoc(supplierRef, {
