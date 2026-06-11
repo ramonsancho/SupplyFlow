@@ -52,7 +52,11 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
       const userRef = doc(db, 'users', auth.currentUser.uid);
       getDoc(userRef).then(docSnap => {
         if (docSnap.exists()) {
-          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+          const userData = docSnap.data();
+          let normalizedRole = userData.role;
+          if (normalizedRole === 'Aprovadora') normalizedRole = 'Aprovador';
+          if (normalizedRole === 'Compradora') normalizedRole = 'Comprador';
+          setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
         }
       }).catch(e => console.error('Error fetching user profile in RFQDetailsModal:', e));
     }
@@ -199,7 +203,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'comprador', 'compradora'].includes(role);
+    return ['administrador', 'comprador'].includes(role);
   };
 
   const confirmDeleteProposal = async (proposalId: string, supplierName: string) => {
@@ -231,7 +235,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
     const name = (currentUserProfile.name || '').toLowerCase().trim();
-    return ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'].includes(role) || 
+    return ['administrador', 'comprador', 'aprovador'].includes(role) || 
            name.includes('carina') || 
            name.includes('ramon');
   };

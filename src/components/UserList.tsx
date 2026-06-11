@@ -96,7 +96,10 @@ export default function UserList() {
             }
           }
           
-          setCurrentUserProfile({ ...userData, id: docSnap.id } as User);
+          let normalizedRole = userData.role;
+          if (normalizedRole === 'Aprovadora') normalizedRole = 'Aprovador';
+          if (normalizedRole === 'Compradora') normalizedRole = 'Comprador';
+          setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
         }
       }, (error) => {
         try {
@@ -109,11 +112,18 @@ export default function UserList() {
 
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
     const unsubscribeUsers = onSnapshot(q, (snapshot) => {
-      const userData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
-      })) as User[];
+      const userData = snapshot.docs.map(doc => {
+        const d = doc.data();
+        let r = d.role;
+        if (r === 'Aprovadora') r = 'Aprovador';
+        if (r === 'Compradora') r = 'Comprador';
+        return {
+          ...d,
+          role: r,
+          id: doc.id,
+          createdAt: d.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        };
+      }) as User[];
       setUsers(userData);
       setIsLoading(false);
     }, (error) => {
@@ -298,7 +308,7 @@ export default function UserList() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
+    return ['administrador', 'aprovador'].includes(role);
   };
 
   return (

@@ -49,29 +49,40 @@ export default function Layout() {
           if (docSnap.exists()) {
             const userData = docSnap.data();
             const userEmail = user.email?.toLowerCase().trim() || '';
-            
+            let normalizedRole = userData.role;
+            let needsDbUpdate = false;
+            const profileUpdates: any = {};
+
+            if (normalizedRole === 'Aprovadora') {
+              normalizedRole = 'Aprovador';
+              profileUpdates.role = 'Aprovador';
+              needsDbUpdate = true;
+            }
+            if (normalizedRole === 'Compradora') {
+              normalizedRole = 'Comprador';
+              profileUpdates.role = 'Comprador';
+              needsDbUpdate = true;
+            }
+
             if (isBootstrapAdmin(userEmail)) {
-              let needsUpdate = false;
-              const updates: any = {};
-              
               if (userData.role !== 'Administrador') {
-                updates.role = 'Administrador';
-                needsUpdate = true;
+                profileUpdates.role = 'Administrador';
+                normalizedRole = 'Administrador';
+                needsDbUpdate = true;
               }
-              
               if (userEmail === "ramon.souza@oeg.group" && userData.name !== "Ramon Souza") {
-                updates.name = "Ramon Souza";
-                needsUpdate = true;
-              }
-              
-              if (needsUpdate) {
-                setDoc(userRef, updates, { merge: true }).catch(e => {
-                  console.error('Error self-healing bootstrap admin:', e);
-                });
+                profileUpdates.name = "Ramon Souza";
+                needsDbUpdate = true;
               }
             }
+
+            if (needsDbUpdate) {
+              setDoc(userRef, profileUpdates, { merge: true }).catch(e => {
+                console.error('Error auto-healing user profile roles/details:', e);
+              });
+            }
             
-            setUserProfile({ ...userData, id: docSnap.id } as UserType);
+            setUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as UserType);
           }
         }, (error) => {
           try {

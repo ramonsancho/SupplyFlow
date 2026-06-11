@@ -48,7 +48,11 @@ export default function Dashboard() {
       const userRef = doc(db, 'users', auth.currentUser.uid);
       unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
-          setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+          const userData = docSnap.data();
+          let normalizedRole = userData.role;
+          if (normalizedRole === 'Aprovadora') normalizedRole = 'Aprovador';
+          if (normalizedRole === 'Compradora') normalizedRole = 'Comprador';
+          setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
         }
       }, (error) => {
         try {
@@ -490,7 +494,7 @@ export default function Dashboard() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
+    return ['administrador', 'aprovador'].includes(role);
   };
 
   const isAdmin = isPowerUser();
@@ -553,7 +557,7 @@ export default function Dashboard() {
           </h2>
           <p className="text-slate-500 mt-2 text-lg font-medium">
             {currentUserProfile?.role === 'Administrador' ? 'Visão global estratégica de suprimentos.' : 
-             (currentUserProfile?.role === 'Comprador' || currentUserProfile?.role === 'Compradora') ? 'Suas atividades e performance de cotação.' :
+             currentUserProfile?.role === 'Comprador' ? 'Suas atividades e performance de cotação.' :
              'Suas aprovações e pendências críticas.'}
           </p>
         </div>

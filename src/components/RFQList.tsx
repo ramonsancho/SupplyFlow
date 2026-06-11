@@ -102,7 +102,11 @@ export default function RFQList() {
         const userRef = doc(db, 'users', user.uid);
         unsubscribeUser = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            setCurrentUserProfile({ ...docSnap.data(), id: docSnap.id } as User);
+            const userData = docSnap.data();
+            let normalizedRole = userData.role;
+            if (normalizedRole === 'Aprovadora') normalizedRole = 'Aprovador';
+            if (normalizedRole === 'Compradora') normalizedRole = 'Comprador';
+            setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
           }
         }, (error) => {
           console.error('Error fetching user profile in RFQList:', error);
@@ -365,7 +369,7 @@ export default function RFQList() {
     const email = (user.email || '').toLowerCase().trim();
     
     // Management roles include both Admin and Buyers
-    const managementRoles = ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'];
+    const managementRoles = ['administrador', 'comprador', 'aprovador'];
     
     return (
       managementRoles.includes(role) ||
