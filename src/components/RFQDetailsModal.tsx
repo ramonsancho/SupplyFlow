@@ -204,7 +204,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'comprador', 'compradora'].includes(role);
+    return role.includes('administrador') || role.includes('comprador') || role.includes('compradora') || role.includes('admin');
   };
 
   const confirmDeleteProposal = async (proposalId: string, supplierName: string) => {
@@ -236,7 +236,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
     const name = (currentUserProfile.name || '').toLowerCase().trim();
-    return ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'].includes(role) || 
+    return role.includes('administrador') || role.includes('admin') || role.includes('comprador') || role.includes('compradora') || role.includes('aprovador') || role.includes('aprovadora') || 
            name.includes('carina') || 
            name.includes('ramon');
   };

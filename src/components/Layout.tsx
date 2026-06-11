@@ -54,10 +54,14 @@ export default function Layout() {
             const profileUpdates: any = {};
 
             const roleLower = normalizedRole.toLowerCase().trim();
-            if (roleLower === 'aprovadora' || roleLower === 'aprovador') {
+            if (roleLower.includes('aprovador') || roleLower.includes('aprovadora')) {
               normalizedRole = 'Aprovador';
-            } else if (roleLower === 'compradora' || roleLower === 'comprador') {
+            } else if (roleLower.includes('comprador') || roleLower.includes('compradora')) {
               normalizedRole = 'Comprador';
+            } else if (roleLower.includes('administrador') || roleLower.includes('admin')) {
+              normalizedRole = 'Administrador';
+            } else if (roleLower.includes('requisitante')) {
+              normalizedRole = 'Requisitante';
             }
 
             if (isBootstrapAdmin(userEmail)) {

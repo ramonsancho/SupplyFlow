@@ -149,10 +149,14 @@ export default function OCList() {
             const profileUpdates: any = {};
 
             const roleLower = normalizedRole.toLowerCase().trim();
-            if (roleLower === 'aprovadora' || roleLower === 'aprovador') {
+            if (roleLower.includes('aprovador') || roleLower.includes('aprovadora')) {
               normalizedRole = 'Aprovador';
-            } else if (roleLower === 'compradora' || roleLower === 'comprador') {
+            } else if (roleLower.includes('comprador') || roleLower.includes('compradora')) {
               normalizedRole = 'Comprador';
+            } else if (roleLower.includes('administrador') || roleLower.includes('admin')) {
+              normalizedRole = 'Administrador';
+            } else if (roleLower.includes('requisitante')) {
+              normalizedRole = 'Requisitante';
             }
 
             if (needsDbUpdate) {
@@ -177,8 +181,10 @@ export default function OCList() {
             const d = doc.data();
             let r = d.role || '';
             const rLower = r.toLowerCase().trim();
-            if (rLower === 'aprovadora' || rLower === 'aprovador') r = 'Aprovador';
-            else if (rLower === 'compradora' || rLower === 'comprador') r = 'Comprador';
+            if (rLower.includes('aprovador') || rLower.includes('aprovadora')) r = 'Aprovador';
+            else if (rLower.includes('comprador') || rLower.includes('compradora')) r = 'Comprador';
+            else if (rLower.includes('administrador') || rLower.includes('admin')) r = 'Administrador';
+            else if (rLower.includes('requisitante')) r = 'Requisitante';
             return { ...d, role: r, id: doc.id } as User;
           });
           setAllUsers(users);
@@ -320,13 +326,13 @@ export default function OCList() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     
     const role = (user.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
+    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin');
   };
 
   const hasApprovalPermission = (user: User | null) => {
     if (!user) return false;
     const role = (user.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
+    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || isPowerUser(user);
   };
 
   const handleApprove = async (po: PurchaseOrder) => {
@@ -1037,7 +1043,7 @@ export default function OCList() {
                       <span>Cancelar</span>
                     </button>
                   )}
-                  {!isRequisitioner(currentUserProfile?.role) && ['administrador', 'aprovador', 'aprovadora'].includes((currentUserProfile?.role || '').toLowerCase().trim()) && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
+                  {!isRequisitioner(currentUserProfile?.role) && hasApprovalPermission(currentUserProfile) && (oc.status === 'approved' || oc.status === 'sent' || oc.status === 'received') && (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();

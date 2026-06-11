@@ -51,8 +51,10 @@ export default function Dashboard() {
           const userData = docSnap.data();
           let normalizedRole = userData.role || '';
           const roleLower = normalizedRole.toLowerCase().trim();
-          if (roleLower === 'aprovadora' || roleLower === 'aprovador') normalizedRole = 'Aprovador';
-          else if (roleLower === 'compradora' || roleLower === 'comprador') normalizedRole = 'Comprador';
+          if (roleLower.includes('aprovador') || roleLower.includes('aprovadora')) normalizedRole = 'Aprovador';
+          else if (roleLower.includes('comprador') || roleLower.includes('compradora')) normalizedRole = 'Comprador';
+          else if (roleLower.includes('administrador') || roleLower.includes('admin')) normalizedRole = 'Administrador';
+          else if (roleLower.includes('requisitante')) normalizedRole = 'Requisitante';
           setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
         }
       }, (error) => {
@@ -495,7 +497,7 @@ export default function Dashboard() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
+    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin');
   };
 
   const isAdmin = isPowerUser();
