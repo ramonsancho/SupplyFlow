@@ -56,16 +56,8 @@ export default function Layout() {
             const roleLower = normalizedRole.toLowerCase().trim();
             if (roleLower === 'aprovadora' || roleLower === 'aprovador') {
               normalizedRole = 'Aprovador';
-              if (userData.role !== 'Aprovador') {
-                profileUpdates.role = 'Aprovador';
-                needsDbUpdate = true;
-              }
             } else if (roleLower === 'compradora' || roleLower === 'comprador') {
               normalizedRole = 'Comprador';
-              if (userData.role !== 'Comprador') {
-                profileUpdates.role = 'Comprador';
-                needsDbUpdate = true;
-              }
             }
 
             if (isBootstrapAdmin(userEmail)) {
