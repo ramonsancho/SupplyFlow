@@ -49,9 +49,10 @@ export default function Dashboard() {
       unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const userData = docSnap.data();
-          let normalizedRole = userData.role;
-          if (normalizedRole === 'Aprovadora') normalizedRole = 'Aprovador';
-          if (normalizedRole === 'Compradora') normalizedRole = 'Comprador';
+          let normalizedRole = userData.role || '';
+          const roleLower = normalizedRole.toLowerCase().trim();
+          if (roleLower === 'aprovadora' || roleLower === 'aprovador') normalizedRole = 'Aprovador';
+          else if (roleLower === 'compradora' || roleLower === 'comprador') normalizedRole = 'Comprador';
           setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
         }
       }, (error) => {
@@ -494,7 +495,7 @@ export default function Dashboard() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador'].includes(role);
+    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
   };
 
   const isAdmin = isPowerUser();

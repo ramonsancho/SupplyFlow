@@ -103,9 +103,10 @@ export default function RFQList() {
         unsubscribeUser = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            let normalizedRole = userData.role;
-            if (normalizedRole === 'Aprovadora') normalizedRole = 'Aprovador';
-            if (normalizedRole === 'Compradora') normalizedRole = 'Comprador';
+            let normalizedRole = userData.role || '';
+            const roleLower = normalizedRole.toLowerCase().trim();
+            if (roleLower === 'aprovadora' || roleLower === 'aprovador') normalizedRole = 'Aprovador';
+            else if (roleLower === 'compradora' || roleLower === 'comprador') normalizedRole = 'Comprador';
             setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
           }
         }, (error) => {
@@ -369,7 +370,7 @@ export default function RFQList() {
     const email = (user.email || '').toLowerCase().trim();
     
     // Management roles include both Admin and Buyers
-    const managementRoles = ['administrador', 'comprador', 'aprovador'];
+    const managementRoles = ['administrador', 'comprador', 'compradora', 'aprovador', 'aprovadora'];
     
     return (
       managementRoles.includes(role) ||

@@ -49,19 +49,23 @@ export default function Layout() {
           if (docSnap.exists()) {
             const userData = docSnap.data();
             const userEmail = user.email?.toLowerCase().trim() || '';
-            let normalizedRole = userData.role;
+            let normalizedRole = userData.role || '';
             let needsDbUpdate = false;
             const profileUpdates: any = {};
 
-            if (normalizedRole === 'Aprovadora') {
+            const roleLower = normalizedRole.toLowerCase().trim();
+            if (roleLower === 'aprovadora' || roleLower === 'aprovador') {
               normalizedRole = 'Aprovador';
-              profileUpdates.role = 'Aprovador';
-              needsDbUpdate = true;
-            }
-            if (normalizedRole === 'Compradora') {
+              if (userData.role !== 'Aprovador') {
+                profileUpdates.role = 'Aprovador';
+                needsDbUpdate = true;
+              }
+            } else if (roleLower === 'compradora' || roleLower === 'comprador') {
               normalizedRole = 'Comprador';
-              profileUpdates.role = 'Comprador';
-              needsDbUpdate = true;
+              if (userData.role !== 'Comprador') {
+                profileUpdates.role = 'Comprador';
+                needsDbUpdate = true;
+              }
             }
 
             if (isBootstrapAdmin(userEmail)) {
