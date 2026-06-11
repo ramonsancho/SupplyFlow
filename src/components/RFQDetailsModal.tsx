@@ -199,7 +199,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'comprador'].includes(role);
+    return ['administrador', 'comprador', 'compradora'].includes(role);
   };
 
   const confirmDeleteProposal = async (proposalId: string, supplierName: string) => {

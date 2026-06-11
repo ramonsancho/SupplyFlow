@@ -33,7 +33,7 @@ type SupplierFormData = z.infer<typeof supplierSchema>;
 interface SupplierModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: SupplierFormData) => void;
+  onSubmit: (data: SupplierFormData, id?: string) => void;
   initialData?: Partial<Supplier>;
   readOnly?: boolean;
 }
@@ -43,7 +43,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
   const [newFamily, setNewFamily] = useState('');
   const [isAddingFamily, setIsAddingFamily] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<SupplierFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm<SupplierFormData>({
     resolver: zodResolver(supplierSchema),
     defaultValues: {
       families: initialData?.families || [],
@@ -53,13 +53,30 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
   });
 
   useEffect(() => {
-    if (isOpen && initialData) {
-      // Reset form with initialData when modal opens
-      Object.entries(initialData).forEach(([key, value]) => {
-        setValue(key as any, value);
-      });
+    if (isOpen) {
+      console.log("SupplierModal opened/updated:", { initialDataId: initialData?.id, initialDataName: initialData?.name });
+      if (initialData) {
+        reset({
+          families: initialData.families || [],
+          isCritical: initialData.isCritical || false,
+          ...initialData
+        });
+      } else {
+        reset({
+          name: '',
+          document: '',
+          email: '',
+          phone: '',
+          address: '',
+          contactName: '',
+          paymentTerms: '',
+          notes: '',
+          families: [],
+          isCritical: false,
+        });
+      }
     }
-  }, [isOpen, initialData, setValue]);
+  }, [isOpen, initialData, reset]);
 
   useEffect(() => {
     const q = query(collection(db, 'families'), orderBy('name', 'asc'));
@@ -174,7 +191,7 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-6 overflow-y-auto">
+        <form onSubmit={handleSubmit((data) => onSubmit(data, initialData?.id))} className="p-8 space-y-6 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Razão Social / Nome</label>

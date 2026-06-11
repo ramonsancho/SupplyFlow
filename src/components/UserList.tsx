@@ -298,7 +298,7 @@ export default function UserList() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    return ['administrador', 'aprovador'].includes(role);
+    return ['administrador', 'aprovador', 'aprovadora'].includes(role);
   };
 
   return (

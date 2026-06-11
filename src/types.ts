@@ -123,7 +123,7 @@ export type User = {
   id: string;
   name: string;
   email: string;
-  role: 'Administrador' | 'Comprador' | 'Aprovador' | 'Requisitante';
+  role: 'Administrador' | 'Comprador' | 'Compradora' | 'Aprovador' | 'Aprovadora' | 'Requisitante';
   status: 'Ativo' | 'Inativo';
   approvalLimit?: number;
   createdAt: string;

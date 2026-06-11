@@ -111,7 +111,15 @@ export default function SupplierList() {
     return () => unsubscribe();
   }, []);
 
-  const handleSaveSupplier = async (data: any) => {
+  const handleSaveSupplier = async (data: any, id?: string) => {
+    const activeId = id || editingSupplier?.id;
+    console.log("handleSaveSupplier triggered:", { 
+      passedId: id, 
+      editingSupplierId: editingSupplier?.id, 
+      activeId,
+      dataName: data.name,
+      dataDocument: data.document
+    });
     try {
       const cleanDoc = (d: string) => {
         if (!d) return '';
@@ -119,17 +127,39 @@ export default function SupplierList() {
         return cleaned.length > 0 ? cleaned : d.trim().toLowerCase();
       };
 
-      const isEditing = !!editingSupplier;
+      const isEditing = !!activeId;
       const documentClean = cleanDoc(data.document);
       const nameClean = data.name ? data.name.trim().toLowerCase() : '';
 
+      // Only flag as changed if isEditing is true AND we have an original supplier to compare with,
+      // and its value differs from what we are saving.
+      const wasNameChanged = !isEditing || !editingSupplier || 
+        editingSupplier.name.trim().toLowerCase() !== nameClean;
+
+      const wasDocumentChanged = !isEditing || !editingSupplier || 
+        cleanDoc(editingSupplier.document) !== documentClean;
+
       const exists = suppliers.some(s => {
-        if (isEditing && s.id === editingSupplier.id) return false;
+        const isSelf = isEditing && s.id === activeId;
+        if (isSelf) return false;
         
         const sDocClean = cleanDoc(s.document);
         const sNameClean = s.name ? s.name.trim().toLowerCase() : '';
         
-        return sNameClean === nameClean || (documentClean && sDocClean && sDocClean === documentClean);
+        const matchesName = wasNameChanged && sNameClean === nameClean;
+        const matchesDoc = wasDocumentChanged && documentClean && sDocClean && sDocClean === documentClean;
+        
+        if (matchesName || matchesDoc) {
+          console.log("Duplicate match found with:", {
+            duplicateSupplierId: s.id,
+            duplicateSupplierName: s.name,
+            duplicateSupplierDocument: s.document,
+            matchesName,
+            matchesDoc
+          });
+          return true;
+        }
+        return false;
       });
 
       if (exists) {
@@ -137,13 +167,13 @@ export default function SupplierList() {
         return;
       }
 
-      if (editingSupplier) {
-        const supplierRef = doc(db, 'suppliers', editingSupplier.id);
+      if (activeId) {
+        const supplierRef = doc(db, 'suppliers', activeId);
         await updateDoc(supplierRef, {
           ...data,
           updatedAt: serverTimestamp()
         });
-        await addLog('Editou Fornecedor', 'Supplier', editingSupplier.id, auth.currentUser?.email || 'Unknown');
+        await addLog('Editou Fornecedor', 'Supplier', activeId, auth.currentUser?.email || 'Unknown');
         await addNotification('Fornecedor Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
         const docRef = await addDoc(collection(db, 'suppliers'), {
@@ -159,7 +189,7 @@ export default function SupplierList() {
       setIsReadOnly(false);
     } catch (error) {
       try {
-        handleFirestoreError(error, editingSupplier ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
+        handleFirestoreError(error, activeId ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
       } catch (e) {
         console.error('Supplier save error:', e);
       }
@@ -235,7 +265,7 @@ export default function SupplierList() {
           setEditingSupplier(undefined);
           setIsReadOnly(false);
         }} 
-        onSubmit={(data) => handleSaveSupplier(data).catch(err => console.error('Error in handleSaveSupplier:', err))}
+        onSubmit={(data, id) => handleSaveSupplier(data, id).catch(err => console.error('Error in handleSaveSupplier:', err))}
         initialData={editingSupplier}
         readOnly={isReadOnly}
       />

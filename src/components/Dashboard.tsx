@@ -553,7 +553,7 @@ export default function Dashboard() {
           </h2>
           <p className="text-slate-500 mt-2 text-lg font-medium">
             {currentUserProfile?.role === 'Administrador' ? 'Visão global estratégica de suprimentos.' : 
-             currentUserProfile?.role === 'Comprador' ? 'Suas atividades e performance de cotação.' :
+             (currentUserProfile?.role === 'Comprador' || currentUserProfile?.role === 'Compradora') ? 'Suas atividades e performance de cotação.' :
              'Suas aprovações e pendências críticas.'}
           </p>
         </div>
