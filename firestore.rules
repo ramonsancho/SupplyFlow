@@ -256,9 +256,9 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() && isValidUser(request.resource.data);
+      allow create: if (isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email)) && isValidUser(request.resource.data);
       allow update: if (isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.email == resource.data.email && request.resource.data.role == resource.data.role)) && isValidUser(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email);
     }
 
     match /suppliers/{supplierId} {
