@@ -127,7 +127,7 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between bg-[#F5F5F5]">
+        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between bg-[#F5F5F5] shrink-0">
           <div>
             <h3 className="text-xl font-bold text-[#141414]">
               {initialData ? 'Editar Ordem de Compra' : 'Nova Ordem de Compra (OC)'}
@@ -139,112 +139,113 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onFormSubmit)} className="p-8 space-y-8 overflow-y-auto">
-          {(Object.keys(errors).length > 0 || validationError) && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
-              <AlertCircle size={20} className="shrink-0" />
-              <p className="text-sm font-bold">{validationError || "Por favor, verifique os campos obrigatórios."}</p>
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Fornecedor</label>
-              <select 
-                {...register('supplierId')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
-              >
-                <option value="">Selecione um fornecedor...</option>
-                {suppliers.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              {errors.supplierId && <p className="text-xs text-red-500 font-medium">{errors.supplierId.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Família de Fornecimento</label>
-              <div className="relative">
-                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+        <form onSubmit={handleSubmit(onFormSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          {/* Main Fields & Config - Static at Top */}
+          <div className="p-8 pb-4 space-y-6 shrink-0 bg-white border-b border-[#F5F5F5]">
+            {(Object.keys(errors).length > 0 || validationError) && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
+                <AlertCircle size={20} className="shrink-0" />
+                <p className="text-sm font-bold">{validationError || "Por favor, verifique os campos obrigatórios."}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Fornecedor</label>
                 <select 
-                  {...register('family')}
-                  className="w-full pl-12 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all appearance-none"
+                  {...register('supplierId')}
+                  className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
                 >
-                  <option value="">Selecione uma família...</option>
-                  {families.map(f => (
-                    <option key={f} value={f}>{f}</option>
+                  <option value="">Selecione um fornecedor...</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
+                {errors.supplierId && <p className="text-xs text-red-500 font-medium">{errors.supplierId.message}</p>}
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Prazo de Entrega</label>
-              <input 
-                type="date"
-                {...register('deliveryDate')}
-                className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
-              />
-              {errors.deliveryDate && <p className="text-xs text-red-500 font-medium">{errors.deliveryDate.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Moeda</label>
-              <div className="flex gap-4 h-[48px] items-center">
-                {(['BRL', 'USD', 'EUR'] as const).map((curr) => (
-                  <label key={curr} className="flex items-center gap-2 cursor-pointer group">
-                    <input 
-                      type="radio" 
-                      value={curr}
-                      {...register('currency')}
-                      className="w-4 h-4 text-[#141414] border-slate-300 focus:ring-[#141414]"
-                    />
-                    <span className="text-sm font-bold text-slate-600 group-hover:text-[#141414] transition-colors">{curr}</span>
-                  </label>
-                ))}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Família de Fornecimento</label>
+                <div className="relative">
+                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8E9299]" size={18} />
+                  <select 
+                    {...register('family')}
+                    className="w-full pl-12 pr-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all appearance-none"
+                  >
+                    <option value="">Selecione uma família...</option>
+                    {families.map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Desconto Global</label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Prazo de Entrega</label>
                 <input 
-                  type="number"
-                  step="0.01"
-                  {...register('discountValue', { valueAsNumber: true })}
-                  className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                  type="date"
+                  {...register('deliveryDate')}
+                  className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all"
                 />
+                {errors.deliveryDate && <p className="text-xs text-red-500 font-medium">{errors.deliveryDate.message}</p>}
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Frete</label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input 
-                  type="number"
-                  step="0.01"
-                  {...register('freightValue', { valueAsNumber: true })}
-                  className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impostos (Global)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input 
-                  type="number"
-                  step="0.01"
-                  {...register('taxValue', { valueAsNumber: true })}
-                  className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#141414] uppercase tracking-widest text-left block">Moeda</label>
+                <div className="flex gap-4 h-[48px] items-center">
+                  {(['BRL', 'USD', 'EUR'] as const).map((curr) => (
+                    <label key={curr} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        value={curr}
+                        {...register('currency')}
+                        className="w-4 h-4 text-[#141414] border-slate-300 focus:ring-[#141414]"
+                      />
+                      <span className="text-sm font-bold text-slate-600 group-hover:text-[#141414] transition-colors">{curr}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Desconto Global</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
+                  <input 
+                    type="number"
+                    step="0.01"
+                    {...register('discountValue', { valueAsNumber: true })}
+                    className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Frete</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="number"
+                    step="0.01"
+                    {...register('freightValue', { valueAsNumber: true })}
+                    className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impostos (Global)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="number"
+                    step="0.01"
+                    {...register('taxValue', { valueAsNumber: true })}
+                    className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#141414]"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Itens do Pedido</label>
               <button 
@@ -256,8 +257,12 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
                 <span>Adicionar Item</span>
               </button>
             </div>
+            {errors.items && <p className="text-xs text-red-500 font-medium">{errors.items.message}</p>}
+          </div>
 
-            <div className="space-y-3">
+          {/* Items List - Scrollable */}
+          <div className="flex-1 overflow-y-auto px-8 py-2">
+            <div className="space-y-3 pb-8">
               {fields.map((field, index) => (
                 <div key={field.id} className="flex flex-col md:flex-row gap-4 p-4 bg-[#F5F5F5] rounded-2xl relative group">
                   <div className="flex-1 space-y-2">
@@ -310,40 +315,42 @@ export default function POModal({ isOpen, onClose, onSubmit, suppliers, initialD
                 </div>
               ))}
             </div>
-            {errors.items && <p className="text-xs text-red-500 font-medium">{errors.items.message}</p>}
           </div>
 
-          <div className="bg-[#141414] p-8 rounded-3xl flex items-center justify-between text-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/10 rounded-2xl">
-                <DollarSign size={24} />
+          {/* Totals & Actions - Static at Bottom */}
+          <div className="p-8 pt-4 border-t border-[#E5E5E5] shrink-0 bg-white space-y-4">
+            <div className="bg-[#141414] p-6 rounded-2xl flex items-center justify-between text-white">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white/10 rounded-2xl">
+                  <DollarSign size={24} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Total do Pedido</p>
+                  <p className="text-2xl font-bold">{formatCurrency(total, currency)}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Total do Pedido</p>
-                <p className="text-3xl font-bold">{formatCurrency(total, currency)}</p>
+              <div className="text-right hidden sm:block">
+                <p className="text-xs text-[#8E9299] font-medium">Itens: {items.length}</p>
+                <p className="text-xs text-[#8E9299] font-medium">Impostos: R$ {items.reduce((acc, i) => acc + (i.tax || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-xs text-white/60 font-medium">Itens: {items.length}</p>
-              <p className="text-xs text-white/60 font-medium">Impostos: R$ {items.reduce((acc, i) => acc + (i.tax || 0), 0).toLocaleString()}</p>
-            </div>
-          </div>
 
-          <div className="pt-6 border-t border-[#E5E5E5] flex items-center justify-end gap-4">
-            <button 
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3 text-sm font-bold text-[#8E9299] hover:text-[#141414] transition-colors"
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit"
-              className="flex items-center gap-2 bg-[#141414] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
-            >
-              <Save size={20} />
-              <span>Gerar Ordem de Compra</span>
-            </button>
+            <div className="flex items-center justify-end gap-4">
+              <button 
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 text-sm font-bold text-[#8E9299] hover:text-[#141414] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                className="flex items-center gap-2 bg-[#141414] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+              >
+                <Save size={20} />
+                <span>{initialData ? 'Salvar Alterações' : 'Gerar Ordem de Compra'}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>
