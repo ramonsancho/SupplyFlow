@@ -326,13 +326,15 @@ export default function OCList() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     
     const role = (user.role || '').toLowerCase().trim();
-    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin');
+    const hasLimit = typeof user.approvalLimit === 'number' && user.approvalLimit > 0;
+    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit;
   };
 
   const hasApprovalPermission = (user: User | null) => {
     if (!user) return false;
     const role = (user.role || '').toLowerCase().trim();
-    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || isPowerUser(user);
+    const hasLimit = typeof user.approvalLimit === 'number' && user.approvalLimit > 0;
+    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit || isPowerUser(user);
   };
 
   const handleApprove = async (po: PurchaseOrder) => {
@@ -976,7 +978,12 @@ export default function OCList() {
                         e.stopPropagation();
                         handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
                       }}
-                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95"
+                      disabled={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && (currentUserProfile.approvalLimit || 0) < oc.totalAmount}
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && (currentUserProfile.approvalLimit || 0) < oc.totalAmount 
+                        ? `Limite de aprovação insuficiente (Seu limite: R$ ${(currentUserProfile.approvalLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` 
+                        : "Aprovar Ordem de Compra"
+                      }
                     >
                       <CheckCircle size={16} />
                       <span>Aprovar</span>
@@ -1064,9 +1071,9 @@ export default function OCList() {
                         setSelectedPO(oc);
                         setIsRatingModalOpen(true);
                       }}
-                      disabled={oc.receivedAmount < oc.totalAmount}
+                      disabled={oc.status !== 'received' && oc.receivedAmount < oc.totalAmount - 0.05}
                       className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={oc.receivedAmount < oc.totalAmount ? "Recebimento incompleto" : "Concluir Ordem"}
+                      title={oc.status !== 'received' && oc.receivedAmount < oc.totalAmount - 0.05 ? "Recebimento incompleto" : "Concluir Ordem"}
                     >
                       <CheckSquare size={16} />
                       <span>Concluir</span>
