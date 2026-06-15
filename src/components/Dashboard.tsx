@@ -497,7 +497,7 @@ export default function Dashboard() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    const hasLimit = typeof currentUserProfile.approvalLimit === 'number' && currentUserProfile.approvalLimit > 0;
+    const hasLimit = currentUserProfile.approvalLimit !== undefined && currentUserProfile.approvalLimit !== null && Number(currentUserProfile.approvalLimit) > 0;
     return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit;
   };
 

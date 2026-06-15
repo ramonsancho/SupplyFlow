@@ -326,14 +326,14 @@ export default function OCList() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     
     const role = (user.role || '').toLowerCase().trim();
-    const hasLimit = typeof user.approvalLimit === 'number' && user.approvalLimit > 0;
+    const hasLimit = user.approvalLimit !== undefined && user.approvalLimit !== null && Number(user.approvalLimit) > 0;
     return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit;
   };
 
   const hasApprovalPermission = (user: User | null) => {
     if (!user) return false;
     const role = (user.role || '').toLowerCase().trim();
-    const hasLimit = typeof user.approvalLimit === 'number' && user.approvalLimit > 0;
+    const hasLimit = user.approvalLimit !== undefined && user.approvalLimit !== null && Number(user.approvalLimit) > 0;
     return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit || isPowerUser(user);
   };
 
@@ -346,7 +346,7 @@ export default function OCList() {
     }
 
     const isSuperAdmin = currentUserProfile.role === 'Administrador' || isBootstrapAdmin(auth.currentUser?.email);
-    const userLimit = currentUserProfile.approvalLimit || 0;
+    const userLimit = Number(currentUserProfile.approvalLimit || 0);
 
     if (!isSuperAdmin && userLimit < po.totalAmount) {
       await addNotification('Limite Insuficiente', `Seu limite de aprovação (${formatCurrency(userLimit, po.currency)}) é inferior ao total da OC (${formatCurrency(po.totalAmount, po.currency)}).`, 'error');
@@ -978,10 +978,10 @@ export default function OCList() {
                         e.stopPropagation();
                         handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
                       }}
-                      disabled={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && (currentUserProfile.approvalLimit || 0) < oc.totalAmount}
+                      disabled={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && Number(currentUserProfile.approvalLimit || 0) < oc.totalAmount}
                       className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && (currentUserProfile.approvalLimit || 0) < oc.totalAmount 
-                        ? `Limite de aprovação insuficiente (Seu limite: R$ ${(currentUserProfile.approvalLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` 
+                      title={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && Number(currentUserProfile.approvalLimit || 0) < oc.totalAmount 
+                        ? `Limite de aprovação insuficiente (Seu limite: R$ ${Number(currentUserProfile.approvalLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` 
                         : "Aprovar Ordem de Compra"
                       }
                     >
