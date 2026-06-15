@@ -345,7 +345,7 @@ export default function OCList() {
       return;
     }
 
-    const isSuperAdmin = currentUserProfile.role === 'Administrador' || isBootstrapAdmin(auth.currentUser?.email);
+    const isSuperAdmin = isBootstrapAdmin(currentUserProfile.email) || isBootstrapAdmin(auth.currentUser?.email);
     const userLimit = parseBrazilianNumber(currentUserProfile.approvalLimit);
 
     if (!isSuperAdmin && userLimit < po.totalAmount) {
@@ -978,9 +978,9 @@ export default function OCList() {
                         e.stopPropagation();
                         handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
                       }}
-                      disabled={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && parseBrazilianNumber(currentUserProfile.approvalLimit) < oc.totalAmount}
+                      disabled={!isBootstrapAdmin(currentUserProfile.email) && parseBrazilianNumber(currentUserProfile.approvalLimit) < oc.totalAmount}
                       className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && parseBrazilianNumber(currentUserProfile.approvalLimit) < oc.totalAmount 
+                      title={!isBootstrapAdmin(currentUserProfile.email) && parseBrazilianNumber(currentUserProfile.approvalLimit) < oc.totalAmount 
                         ? `Limite de aprovação insuficiente (Seu limite: R$ ${parseBrazilianNumber(currentUserProfile.approvalLimit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` 
                         : "Aprovar Ordem de Compra"
                       }
