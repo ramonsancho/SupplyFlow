@@ -38,7 +38,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { initializeApp, getAuth as getAuthSecondary, createUserWithEmailAndPassword, firebaseConfig, getAuthToken } from '../firebase';
-import { isBootstrapAdmin } from '../constants';
+import { isBootstrapAdmin, parseBrazilianNumber } from '../constants';
 import { deleteApp, getApps } from 'firebase/app';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -315,7 +315,7 @@ export default function UserList() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    const hasLimit = currentUserProfile.approvalLimit !== undefined && currentUserProfile.approvalLimit !== null && Number(currentUserProfile.approvalLimit) > 0;
+    const hasLimit = currentUserProfile.approvalLimit !== undefined && currentUserProfile.approvalLimit !== null && parseBrazilianNumber(currentUserProfile.approvalLimit) > 0;
     return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit;
   };
 
@@ -443,7 +443,7 @@ export default function UserList() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="text-sm font-mono font-bold text-slate-900">
-                        {user.approvalLimit ? `R$ ${user.approvalLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                        {user.approvalLimit ? `R$ ${parseBrazilianNumber(user.approvalLimit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
                       </div>
                     </td>
                     <td className="px-8 py-6">

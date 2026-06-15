@@ -19,7 +19,7 @@ import { db, handleFirestoreError, OperationType, formatDate, formatCurrency } f
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { PurchaseOrder, RFQ, Supplier, Proposal, User, Contract } from '../types';
 import { auth } from '../firebase';
-import { isBootstrapAdmin } from '../constants';
+import { isBootstrapAdmin, parseBrazilianNumber } from '../constants';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion } from 'motion/react';
@@ -497,7 +497,7 @@ export default function Dashboard() {
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     if (!currentUserProfile) return false;
     const role = (currentUserProfile.role || '').toLowerCase().trim();
-    const hasLimit = currentUserProfile.approvalLimit !== undefined && currentUserProfile.approvalLimit !== null && Number(currentUserProfile.approvalLimit) > 0;
+    const hasLimit = currentUserProfile.approvalLimit !== undefined && currentUserProfile.approvalLimit !== null && parseBrazilianNumber(currentUserProfile.approvalLimit) > 0;
     return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit;
   };
 
