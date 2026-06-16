@@ -82,7 +82,13 @@ export default function Layout() {
               });
             }
             
-            setUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as UserType);
+            const profile = { ...userData, role: normalizedRole, id: docSnap.id } as UserType;
+            try {
+              localStorage.setItem('userProfile', JSON.stringify(profile));
+            } catch (err) {
+              console.error('Error writing userProfile to localStorage:', err);
+            }
+            setUserProfile(profile);
           }
         }, (error) => {
           try {
@@ -93,6 +99,9 @@ export default function Layout() {
         });
         profileUnsubscribeRef.current = unsubscribeProfile;
       } else {
+        try {
+          localStorage.removeItem('userProfile');
+        } catch {}
         setUserProfile(null);
         if (profileUnsubscribeRef.current) {
           profileUnsubscribeRef.current();

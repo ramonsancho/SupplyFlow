@@ -72,7 +72,14 @@ export default function OCList() {
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('userProfile');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -165,7 +172,11 @@ export default function OCList() {
               });
             }
             
-            setCurrentUserProfile({ ...userData, role: normalizedRole, id: docSnap.id } as User);
+            const profile = { ...userData, role: normalizedRole, id: docSnap.id } as User;
+            try {
+              localStorage.setItem('userProfile', JSON.stringify(profile));
+            } catch {}
+            setCurrentUserProfile(profile);
           }
         }, (error) => {
           try {
@@ -320,21 +331,45 @@ export default function OCList() {
   };
 
   const isPowerUser = (user: User | null) => {
-    if (!user) return false;
-    const currentEmail = user.email?.toLowerCase().trim() || '';
+    let u = user;
+    if (!u) {
+      try {
+        const cached = localStorage.getItem('userProfile');
+        if (cached) u = JSON.parse(cached);
+      } catch {}
+    }
+    if (!u) return false;
+    
+    const currentEmail = u.email?.toLowerCase().trim() || '';
     if (isBootstrapAdmin(currentEmail)) return true;
     if (currentEmail.includes('ramon') || currentEmail.includes('carina')) return true;
     
-    const role = (user.role || '').toLowerCase().trim();
-    const hasLimit = user.approvalLimit !== undefined && user.approvalLimit !== null && parseBrazilianNumber(user.approvalLimit) > 0;
+    const role = (u.role || '').toLowerCase().trim();
+    const hasLimit = u.approvalLimit !== undefined && u.approvalLimit !== null && parseBrazilianNumber(u.approvalLimit) > 0;
     return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit;
   };
 
   const hasApprovalPermission = (user: User | null) => {
-    if (!user) return false;
-    const role = (user.role || '').toLowerCase().trim();
-    const hasLimit = user.approvalLimit !== undefined && user.approvalLimit !== null && parseBrazilianNumber(user.approvalLimit) > 0;
-    return role.includes('administrador') || role.includes('aprovador') || role.includes('aprovadora') || role.includes('admin') || hasLimit || isPowerUser(user);
+    let u = user;
+    if (!u) {
+      try {
+        const cached = localStorage.getItem('userProfile');
+        if (cached) u = JSON.parse(cached);
+      } catch {}
+    }
+    if (!u) return false;
+    
+    const role = (u.role || '').toLowerCase().trim();
+    const hasLimit = u.approvalLimit !== undefined && u.approvalLimit !== null && parseBrazilianNumber(u.approvalLimit) > 0;
+    
+    const roleIsApprover = role.includes('administrador') || 
+                           role.includes('aprovador') || 
+                           role.includes('aprovadora') || 
+                           role.includes('admin') || 
+                           role === 'aprovador' || 
+                           role === 'aprovadora';
+
+    return roleIsApprover || hasLimit || isPowerUser(u);
   };
 
   const handleApprove = async (po: PurchaseOrder) => {
