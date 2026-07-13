@@ -36,6 +36,30 @@ export function useAuditLog() {
     previousState?: any,
     newState?: any
   ) => {
+    const safeClone = (obj: any): any => {
+      if (obj === null || obj === undefined) return null;
+      if (typeof obj !== 'object') return obj;
+      try {
+        const cache = new Set();
+        const str = JSON.stringify(obj, (key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            if (cache.has(value)) {
+              return '[Circular]';
+            }
+            cache.add(value);
+          }
+          if (typeof value === 'function') {
+            return undefined;
+          }
+          return value;
+        });
+        return JSON.parse(str);
+      } catch (e) {
+        console.warn('Error cloning object for audit log:', e);
+        return { error: 'Non-serializable object' };
+      }
+    };
+
     try {
       await addDoc(collection(db, 'audit-logs'), {
         userId: auth.currentUser?.uid || 'unknown',
@@ -44,8 +68,8 @@ export function useAuditLog() {
         entity,
         entityId,
         timestamp: serverTimestamp(),
-        previousState: previousState ? JSON.parse(JSON.stringify(previousState)) : null,
-        newState: newState ? JSON.parse(JSON.stringify(newState)) : null,
+        previousState: previousState ? safeClone(previousState) : null,
+        newState: newState ? safeClone(newState) : null,
         undone: false
       });
     } catch (error) {

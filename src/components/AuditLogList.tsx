@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { History, User, Tag, Clock, RotateCcw } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot, updateDoc, deleteDoc, setDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, deleteDoc, setDoc, addDoc, collection, serverTimestamp, Timestamp, deleteField, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { isBootstrapAdmin } from '../constants';
 import { useNotifications } from '../hooks/useNotifications';
-import { AuditLog } from '../types';
+import { AuditLog, PurchaseOrder } from '../types';
 
 export default function AuditLogList() {
   const { logs } = useAuditLog();
@@ -21,22 +21,32 @@ export default function AuditLogList() {
   }, [logs]);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
-    const userEmail = auth.currentUser.email;
-    if (isBootstrapAdmin(userEmail)) {
-      setIsAdmin(true);
-      return;
-    }
-
-    const userRef = doc(db, 'users', auth.currentUser.uid);
-    const unsubscribe = onSnapshot(userRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const userData = snapshot.data();
-        setIsAdmin(userData.role === 'Administrador');
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
       }
+      
+      const userEmail = user.email;
+      if (isBootstrapAdmin(userEmail)) {
+        setIsAdmin(true);
+        return;
+      }
+
+      const userRef = doc(db, 'users', user.uid);
+      const unsubscribeDoc = onSnapshot(userRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const userData = snapshot.data();
+          setIsAdmin(userData.role === 'Administrador');
+        } else {
+          setIsAdmin(false);
+        }
+      });
+
+      return () => unsubscribeDoc();
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
 
   const handleUndo = async (log: AuditLog) => {
@@ -107,6 +117,62 @@ export default function AuditLogList() {
             await updateDoc(doc(db, 'rfqs', prev.rfqState.id), { status: prev.rfqState.status });
           }
         } 
+        else if (log.action.startsWith('Concluiu OC')) {
+          const poRef = doc(db, 'purchase-orders', log.entityId);
+          const poSnap = await getDoc(poRef);
+          if (!poSnap.exists()) {
+            throw new Error('Ordem de Compra não encontrada para reversão.');
+          }
+          const poData = poSnap.data() as PurchaseOrder;
+          
+          if (poData.status !== 'closed') {
+            throw new Error('Esta Ordem de Compra já não está com o status Concluído.');
+          }
+
+          // 1. Update the PO status to 'approved' and remove rating/hasRNC
+          await updateDoc(poRef, {
+            status: 'approved',
+            rating: deleteField(),
+            hasRNC: deleteField(),
+            completedAt: deleteField(),
+            updatedAt: serverTimestamp()
+          });
+
+          // 2. Recalculate supplier rating
+          const supplierId = poData.supplierId;
+          if (supplierId) {
+            const q = query(
+              collection(db, 'purchase-orders'),
+              where('supplierId', '==', supplierId),
+              where('status', '==', 'closed')
+            );
+            const completedPOsSnap = await getDocs(q);
+            const completedPOs = completedPOsSnap.docs
+              .map(d => d.data() as PurchaseOrder)
+              .filter(p => p.id !== log.entityId);
+
+            let rating = 0;
+            let accuracy = 100;
+
+            if (completedPOs.length > 0) {
+              const ratings = completedPOs.map(p => p.rating).filter(r => r !== undefined) as number[];
+              const rncValues = completedPOs.map(p => p.hasRNC).filter(r => r !== undefined) as boolean[];
+
+              const totalRating = ratings.reduce((acc, r) => acc + r, 0);
+              rating = totalRating / ratings.length;
+
+              const accuratePOs = rncValues.filter(r => r === false).length;
+              accuracy = (accuratePOs / rncValues.length) * 100;
+            }
+
+            const supplierRef = doc(db, 'suppliers', supplierId);
+            await updateDoc(supplierRef, {
+              rating: Number(rating.toFixed(2)),
+              accuracy: Number(accuracy.toFixed(2)),
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
         // 2. Generic Undo: Creation (previousState is null, newState exists)
         else if (!log.previousState && log.newState) {
           if (!collectionName) throw new Error(`Entidade desconhecida para deleção: ${log.entity}`);
@@ -183,7 +249,7 @@ export default function AuditLogList() {
             </div>
           ) : (
             logs.map(log => {
-              const hasStates = !!(log.previousState || log.newState || log.action === 'Gerou PO de Proposta');
+              const hasStates = !!(log.previousState || log.newState || log.action === 'Gerou PO de Proposta' || log.action.startsWith('Concluiu OC'));
               return (
                 <div key={log.id} className="p-6 flex items-center justify-between gap-6 hover:bg-[#F5F5F5] transition-colors">
                   <div className="flex items-start gap-6 flex-1">

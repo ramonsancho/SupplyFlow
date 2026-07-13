@@ -319,7 +319,7 @@ export default function OCList() {
       const docRef = await addDoc(collection(db, 'purchase-orders'), poPayload);
       
       setIsModalOpen(false);
-      await addLog('Criou OC', 'PurchaseOrder', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...poPayload, id: docRef.id });
+      await addLog(`Criou OC #${poNumber}`, 'PurchaseOrder', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...poPayload, id: docRef.id });
       await addNotification('OC Gerada', `A ordem de compra #${poNumber} foi emitida para ${supplier?.name}.`, 'success');
 
       if (poPayload.status === 'pending_approval') {
@@ -414,7 +414,7 @@ export default function OCList() {
         updatedAt: serverTimestamp()
       });
 
-      await addLog('Aprovou OC', 'PurchaseOrder', po.id, auth.currentUser?.email || 'Unknown', po, { 
+      await addLog(`Aprovou OC #${po.number}`, 'PurchaseOrder', po.id, auth.currentUser?.email || 'Unknown', po, { 
         ...po, 
         status: 'approved',
         approvedBy: currentUserProfile.name,
@@ -459,7 +459,7 @@ export default function OCList() {
         updatedAt: serverTimestamp()
       });
 
-      await addLog('Registrou Recebimento', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
+      await addLog(`Registrou Recebimento na OC #${selectedPO.number}`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
         ...selectedPO,
         receivedAmount: newReceived,
         status: newStatus,
@@ -514,7 +514,7 @@ export default function OCList() {
 
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
 
-      await addLog(`Editou OC (Rev ${newRevision})`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
+      await addLog(`Editou OC #${selectedPO.number} (Rev ${newRevision})`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
         ...selectedPO,
         ...updateData
       });
@@ -577,7 +577,7 @@ export default function OCList() {
 
       setIsRatingModalOpen(false);
       setSelectedPO(null);
-      await addLog('Concluiu OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
+      await addLog(`Concluiu OC #${selectedPO.number}`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
         ...selectedPO,
         status: 'closed',
         rating,
@@ -597,7 +597,7 @@ export default function OCList() {
     try {
       const originalData = pos.find(p => p.id === id);
       await deleteDoc(doc(db, 'purchase-orders', id));
-      await addLog('Excluiu OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown', originalData, null);
+      await addLog(`Excluiu OC #${number}`, 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown', originalData, null);
       await addNotification('OC Excluída', `A ordem de compra #${number} foi removida.`, 'warning');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `purchase-orders/${id}`);
@@ -611,7 +611,7 @@ export default function OCList() {
         status: 'cancelled',
         updatedAt: serverTimestamp()
       });
-      await addLog('Cancelou OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown', originalData, { ...originalData, status: 'cancelled' });
+      await addLog(`Cancelou OC #${number}`, 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown', originalData, { ...originalData, status: 'cancelled' });
       await addNotification('OC Cancelada', `A ordem de compra #${number} foi cancelada.`, 'error');
       setPoToCancel(null);
     } catch (error) {
