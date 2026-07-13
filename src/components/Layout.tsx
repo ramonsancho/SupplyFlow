@@ -85,6 +85,7 @@ export default function Layout() {
             const profile = { ...userData, role: normalizedRole, id: docSnap.id } as UserType;
             try {
               localStorage.setItem('userProfile', JSON.stringify(profile));
+              window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: profile }));
             } catch (err) {
               console.error('Error writing userProfile to localStorage:', err);
             }

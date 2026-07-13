@@ -131,11 +131,12 @@ export default function RFQList() {
     try {
       if (rfqToEdit) {
         // Update existing RFQ
+        const originalData = rfqs.find(r => r.id === rfqToEdit.id);
         await updateDoc(doc(db, 'rfqs', rfqToEdit.id), {
           ...data,
           updatedAt: serverTimestamp(),
         });
-        await addLog('Editou RFQ', 'RFQ', rfqToEdit.id, auth.currentUser?.email || 'Unknown');
+        await addLog('Editou RFQ', 'RFQ', rfqToEdit.id, auth.currentUser?.email || 'Unknown', originalData, { ...originalData, ...data });
         await addNotification('RFQ Atualizada', `A cotação #${rfqToEdit.number} foi atualizada com sucesso.`, 'success');
         setRfqToEdit(null);
       } else {
@@ -150,7 +151,7 @@ export default function RFQList() {
           ...rfqPayload,
           createdAt: serverTimestamp(),
         });
-        await addLog('Criou RFQ', 'RFQ', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addLog('Criou RFQ', 'RFQ', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...rfqPayload, id: docRef.id });
         await addNotification('RFQ Criada', `A cotação #${rfqs.length + 1001} foi gerada com sucesso.`, 'success');
       }
       setIsModalOpen(false);
@@ -165,8 +166,9 @@ export default function RFQList() {
 
   const handleDeleteRFQ = async (id: string, number: number) => {
     try {
+      const originalData = rfqs.find(r => r.id === id);
       await deleteDoc(doc(db, 'rfqs', id));
-      await addLog('Excluiu RFQ', 'RFQ', id, auth.currentUser?.email || 'Unknown');
+      await addLog('Excluiu RFQ', 'RFQ', id, auth.currentUser?.email || 'Unknown', originalData, null);
       await addNotification('RFQ Excluída', `A cotação #${number} foi removida.`, 'warning');
     } catch (error) {
       try {
@@ -244,13 +246,14 @@ export default function RFQList() {
         `
       });
 
+      const originalData = rfqs.find(r => r.id === id);
       await updateDoc(doc(db, 'rfqs', id), {
         status: 'sent',
         sentAt: serverTimestamp()
       });
 
       await addNotification('Email Enviado', `A cotação foi enviada para ${supplierEmails.length} fornecedores da família ${rfq.family}.`, 'success');
-      await addLog('Enviou RFQ por Email', 'RFQ', id, auth.currentUser?.email || 'Unknown');
+      await addLog('Enviou RFQ por Email', 'RFQ', id, auth.currentUser?.email || 'Unknown', originalData, { ...originalData, status: 'sent' });
     } catch (error) {
       console.error('Error sending RFQ emails:', error);
       const errorMessage = error instanceof Error ? error.message : 'Não foi possível enviar a cotação por email.';

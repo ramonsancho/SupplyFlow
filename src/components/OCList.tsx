@@ -116,6 +116,21 @@ export default function OCList() {
     let unsubscribeProfile: (() => void) | null = null;
     let unsubscribeUsersList: (() => void) | null = null;
 
+    const handleProfileUpdate = () => {
+      try {
+        const cached = localStorage.getItem('userProfile');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setCurrentUserProfile(parsed);
+        }
+      } catch (err) {
+        console.error('Error handling profile update in OCList:', err);
+      }
+    };
+
+    window.addEventListener('storage', handleProfileUpdate);
+    window.addEventListener('userProfileUpdated', handleProfileUpdate);
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const userRef = doc(db, 'users', user.uid);
@@ -217,6 +232,8 @@ export default function OCList() {
       unsubscribeAuth();
       if (unsubscribeProfile) unsubscribeProfile();
       if (unsubscribeUsersList) unsubscribeUsersList();
+      window.removeEventListener('storage', handleProfileUpdate);
+      window.removeEventListener('userProfileUpdated', handleProfileUpdate);
     };
   }, []);
 
@@ -302,7 +319,7 @@ export default function OCList() {
       const docRef = await addDoc(collection(db, 'purchase-orders'), poPayload);
       
       setIsModalOpen(false);
-      await addLog('Criou OC', 'PurchaseOrder', docRef.id, auth.currentUser?.email || 'Unknown');
+      await addLog('Criou OC', 'PurchaseOrder', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...poPayload, id: docRef.id });
       await addNotification('OC Gerada', `A ordem de compra #${poNumber} foi emitida para ${supplier?.name}.`, 'success');
 
       if (poPayload.status === 'pending_approval') {
@@ -397,7 +414,12 @@ export default function OCList() {
         updatedAt: serverTimestamp()
       });
 
-      await addLog('Aprovou OC', 'PurchaseOrder', po.id, auth.currentUser?.email || 'Unknown');
+      await addLog('Aprovou OC', 'PurchaseOrder', po.id, auth.currentUser?.email || 'Unknown', po, { 
+        ...po, 
+        status: 'approved',
+        approvedBy: currentUserProfile.name,
+        approvedByName: currentUserProfile.name
+      });
       await addNotification('OC Aprovada', `A ordem de compra #${po.number} foi aprovada com sucesso.`, 'success');
     } catch (error) {
       try {
@@ -437,7 +459,12 @@ export default function OCList() {
         updatedAt: serverTimestamp()
       });
 
-      await addLog('Registrou Recebimento', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
+      await addLog('Registrou Recebimento', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
+        ...selectedPO,
+        receivedAmount: newReceived,
+        status: newStatus,
+        receipts: [...(selectedPO.receipts || []), newReceipt]
+      });
       await addNotification('Recebimento Registrado', `Recebimento de R$ ${formatCurrency(amount)} (NF: ${invoiceNumber}) registrado para OC #${selectedPO.number}.`, 'info');
       setIsReceiveModalOpen(false);
       setSelectedPO(null);
@@ -487,7 +514,10 @@ export default function OCList() {
 
       await updateDoc(doc(db, 'purchase-orders', selectedPO.id), updateData);
 
-      await addLog(`Editou OC (Rev ${newRevision})`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
+      await addLog(`Editou OC (Rev ${newRevision})`, 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
+        ...selectedPO,
+        ...updateData
+      });
       await addNotification('OC Atualizada', `A OC #${selectedPO.number} foi atualizada para a revisão ${newRevision}.`, 'success');
       setIsEditAmountModalOpen(false);
       setSelectedPO(null);
@@ -547,7 +577,12 @@ export default function OCList() {
 
       setIsRatingModalOpen(false);
       setSelectedPO(null);
-      await addLog('Concluiu OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown');
+      await addLog('Concluiu OC', 'PurchaseOrder', selectedPO.id, auth.currentUser?.email || 'Unknown', selectedPO, {
+        ...selectedPO,
+        status: 'closed',
+        rating,
+        hasRNC
+      });
       await addNotification('OC Concluída', `A ordem de compra #${selectedPO.number} foi concluída com nota ${rating} e RNC: ${hasRNC ? 'SIM' : 'NÃO'}.`, 'success');
     } catch (error) {
       try {
@@ -560,8 +595,9 @@ export default function OCList() {
 
   const handleDeletePO = async (id: string, number: number) => {
     try {
+      const originalData = pos.find(p => p.id === id);
       await deleteDoc(doc(db, 'purchase-orders', id));
-      await addLog('Excluiu OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
+      await addLog('Excluiu OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown', originalData, null);
       await addNotification('OC Excluída', `A ordem de compra #${number} foi removida.`, 'warning');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `purchase-orders/${id}`);
@@ -570,11 +606,12 @@ export default function OCList() {
 
   const handleCancelPO = async (id: string, number: number) => {
     try {
+      const originalData = pos.find(p => p.id === id);
       await updateDoc(doc(db, 'purchase-orders', id), {
         status: 'cancelled',
         updatedAt: serverTimestamp()
       });
-      await addLog('Cancelou OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown');
+      await addLog('Cancelou OC', 'PurchaseOrder', id, auth.currentUser?.email || 'Unknown', originalData, { ...originalData, status: 'cancelled' });
       await addNotification('OC Cancelada', `A ordem de compra #${number} foi cancelada.`, 'error');
       setPoToCancel(null);
     } catch (error) {
@@ -1007,23 +1044,40 @@ export default function OCList() {
 
               <div className="flex flex-col gap-2 min-w-[280px] self-center">
                 <div className="flex items-center justify-end gap-2">
-                  {currentUserProfile && hasApprovalPermission(currentUserProfile) && (oc.status === 'pending_approval' || oc.status === 'draft') && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
-                      }}
-                      disabled={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && parseBrazilianNumber(currentUserProfile.approvalLimit) < oc.totalAmount}
-                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={currentUserProfile.role !== 'Administrador' && !isBootstrapAdmin(currentUserProfile.email) && parseBrazilianNumber(currentUserProfile.approvalLimit) < oc.totalAmount 
-                        ? `Limite de aprovação insuficiente (Seu limite: R$ ${parseBrazilianNumber(currentUserProfile.approvalLimit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` 
-                        : "Aprovar Ordem de Compra"
-                      }
-                    >
-                      <CheckCircle size={16} />
-                      <span>Aprovar</span>
-                    </button>
-                  )}
+                  {(() => {
+                    const u = currentUserProfile || (() => {
+                      try {
+                        const cached = localStorage.getItem('userProfile');
+                        return cached ? JSON.parse(cached) : null;
+                      } catch { return null; }
+                    })();
+                    
+                    if (!u) return null;
+                    if (!hasApprovalPermission(u)) return null;
+                    if (oc.status !== 'pending_approval' && oc.status !== 'draft') return null;
+                    
+                    const isSuperAdmin = u.role === 'Administrador' || isBootstrapAdmin(u.email) || isBootstrapAdmin(auth.currentUser?.email);
+                    const userLimit = parseBrazilianNumber(u.approvalLimit);
+                    const isLimitSufficient = isSuperAdmin || userLimit >= oc.totalAmount;
+
+                    return (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleApprove(oc).catch(err => console.error('Error in handleApprove:', err));
+                        }}
+                        disabled={!isLimitSufficient}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#0052FF] rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!isLimitSufficient 
+                          ? `Limite de aprovação insuficiente (Seu limite: R$ ${userLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` 
+                          : "Aprovar Ordem de Compra"
+                        }
+                      >
+                        <CheckCircle size={16} />
+                        <span>Aprovar</span>
+                      </button>
+                    );
+                  })()}
                   {oc.status === 'draft' && (
                     <button 
                       onClick={async (e) => {

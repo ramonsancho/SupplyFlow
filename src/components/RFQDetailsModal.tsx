@@ -110,7 +110,7 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         createdAt: serverTimestamp(),
       });
       setIsProposalModalOpen(false);
-      await addLog('Incluiu Proposta', 'Proposal', docRef.id, auth.currentUser?.email || 'Unknown');
+      await addLog('Incluiu Proposta', 'Proposal', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...proposalPayload, id: docRef.id });
       await addNotification('Proposta Incluída', `A proposta de ${data.supplierName} foi registrada.`, 'success');
     } catch (error) {
       try {
@@ -179,7 +179,18 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
         status: 'closed'
       });
 
-      await addLog('Gerou PO de Proposta', 'PurchaseOrder', poRef.id, auth.currentUser?.email || 'Unknown');
+      const previousState = {
+        poId: null,
+        proposalStates: proposals.map(p => ({ id: p.id, status: p.status })),
+        rfqState: { id: rfq.id, status: rfq.status }
+      };
+      const newState = {
+        poId: poRef.id,
+        proposalStates: proposals.map(p => ({ id: p.id, status: p.id === proposal.id ? 'accepted' : 'rejected' })),
+        rfqState: { id: rfq.id, status: 'closed' }
+      };
+
+      await addLog('Gerou PO de Proposta', 'PurchaseOrder', poRef.id, auth.currentUser?.email || 'Unknown', previousState, newState);
       await addNotification('PO Gerada', `A Ordem de Compra #${poNumber} foi gerada a partir da proposta de ${proposal.supplierName}.`, 'success');
 
       // Disparo de e-mail removido por desejo do usuário
@@ -216,8 +227,9 @@ export default function RFQDetailsModal({ isOpen, onClose, rfq }: RFQDetailsModa
     }
 
     try {
+      const originalProposal = proposals.find(p => p.id === proposalId);
       await deleteDoc(doc(db, 'proposals', proposalId));
-      await addLog('Excluiu Proposta', 'Proposal', proposalId, auth.currentUser?.email || 'Unknown');
+      await addLog('Excluiu Proposta', 'Proposal', proposalId, auth.currentUser?.email || 'Unknown', originalProposal, null);
       await addNotification('Proposta Excluída', `A proposta de ${supplierName} foi excluída com sucesso.`, 'success');
       setProposalToDelete(null);
     } catch (error) {

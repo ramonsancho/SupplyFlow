@@ -28,7 +28,14 @@ export function useAuditLog() {
     return () => unsubscribe();
   }, []);
 
-  const addLog = useCallback(async (action: string, entity: string, entityId: string, userEmail: string) => {
+  const addLog = useCallback(async (
+    action: string, 
+    entity: string, 
+    entityId: string, 
+    userEmail: string,
+    previousState?: any,
+    newState?: any
+  ) => {
     try {
       await addDoc(collection(db, 'audit-logs'), {
         userId: auth.currentUser?.uid || 'unknown',
@@ -37,6 +44,9 @@ export function useAuditLog() {
         entity,
         entityId,
         timestamp: serverTimestamp(),
+        previousState: previousState ? JSON.parse(JSON.stringify(previousState)) : null,
+        newState: newState ? JSON.parse(JSON.stringify(newState)) : null,
+        undone: false
       });
     } catch (error) {
       if (auth.currentUser) {

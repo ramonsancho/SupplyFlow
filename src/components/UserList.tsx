@@ -175,7 +175,7 @@ export default function UserList() {
           ...data,
           updatedAt: serverTimestamp()
         });
-        await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown');
+        await addLog('Editou Usuário', 'User', editingUser.id, auth.currentUser?.email || 'Unknown', editingUser, { ...editingUser, ...data });
         await addNotification('Usuário Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
         // 0. Verificar se já existe no Firestore
@@ -187,10 +187,13 @@ export default function UserList() {
 
         // Apenas criamos o documento no Firestore. 
         // O usuário criará sua conta de Autenticação através do "Primeiro Acesso" na tela de Login.
-        const docRef = await addDoc(collection(db, 'users'), {
+        const userPayload = {
           ...data,
-          createdAt: serverTimestamp(),
           status: data.status || 'Ativo'
+        };
+        const docRef = await addDoc(collection(db, 'users'), {
+          ...userPayload,
+          createdAt: serverTimestamp(),
         });
         
         // Opcional: Enviar um email de convite informando que ele pode fazer o primeiro acesso
@@ -220,7 +223,7 @@ export default function UserList() {
           console.warn('Não foi possível enviar o e-mail de convite, mas o usuário foi criado no banco.', emailErr);
         }
         
-        await addLog('Cadastrou Usuário', 'User', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addLog('Cadastrou Usuário', 'User', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...userPayload, id: docRef.id });
         await addNotification('Usuário Cadastrado', `${data.name} foi adicionado. Ele deve realizar o "Primeiro Acesso" para definir sua senha.`, 'success');
       }
       setIsModalOpen(false);
@@ -280,9 +283,10 @@ export default function UserList() {
       }
 
       // 2. Deletar do Firestore
+      const originalData = users.find(u => u.id === id);
       await deleteDoc(doc(db, 'users', id));
       
-      await addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown');
+      await addLog('Excluiu Usuário', 'User', id, auth.currentUser?.email || 'Unknown', originalData, null);
       await addNotification('Usuário Excluído', `${name} foi removido do sistema.`, 'warning');
     } catch (error) {
       try {

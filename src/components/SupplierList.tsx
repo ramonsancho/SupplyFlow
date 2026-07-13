@@ -169,11 +169,12 @@ export default function SupplierList() {
 
       if (activeId) {
         const supplierRef = doc(db, 'suppliers', activeId);
+        const originalData = suppliers.find(s => s.id === activeId);
         await updateDoc(supplierRef, {
           ...data,
           updatedAt: serverTimestamp()
         });
-        await addLog('Editou Fornecedor', 'Supplier', activeId, auth.currentUser?.email || 'Unknown');
+        await addLog('Editou Fornecedor', 'Supplier', activeId, auth.currentUser?.email || 'Unknown', originalData, { ...originalData, ...data });
         await addNotification('Fornecedor Atualizado', `Os dados de ${data.name} foram salvos.`, 'success');
       } else {
         const docRef = await addDoc(collection(db, 'suppliers'), {
@@ -181,7 +182,7 @@ export default function SupplierList() {
           createdAt: serverTimestamp(),
           rating: 0
         });
-        await addLog('Cadastrou Fornecedor', 'Supplier', docRef.id, auth.currentUser?.email || 'Unknown');
+        await addLog('Cadastrou Fornecedor', 'Supplier', docRef.id, auth.currentUser?.email || 'Unknown', null, { ...data, rating: 0 });
         await addNotification('Fornecedor Cadastrado', `${data.name} foi adicionado com sucesso.`, 'success');
       }
       setIsModalOpen(false);
@@ -198,8 +199,9 @@ export default function SupplierList() {
 
   const handleDeleteSupplier = async (id: string, name: string) => {
     try {
+      const originalData = suppliers.find(s => s.id === id);
       await deleteDoc(doc(db, 'suppliers', id));
-      await addLog('Excluiu Fornecedor', 'Supplier', id, auth.currentUser?.email || 'Unknown');
+      await addLog('Excluiu Fornecedor', 'Supplier', id, auth.currentUser?.email || 'Unknown', originalData, null);
       await addNotification('Fornecedor Excluído', `${name} foi removido do sistema.`, 'warning');
     } catch (error) {
       try {

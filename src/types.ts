@@ -117,6 +117,11 @@ export type AuditLog = {
   entity: string;
   entityId: string;
   timestamp: string;
+  previousState?: any;
+  newState?: any;
+  undone?: boolean;
+  undoneBy?: string;
+  undoneAt?: string;
 };
 
 export type User = {
