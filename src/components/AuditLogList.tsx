@@ -41,6 +41,9 @@ export default function AuditLogList() {
         } else {
           setIsAdmin(false);
         }
+      }, (err) => {
+        console.error('AuditLogList user doc onSnapshot error:', err);
+        setIsAdmin(false);
       });
 
       return () => unsubscribeDoc();

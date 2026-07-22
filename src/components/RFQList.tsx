@@ -201,7 +201,10 @@ export default function RFQList() {
       const q = query(suppliersRef, where('families', 'array-contains', rfq.family));
       const querySnapshot = await getDocs(q);
       
-      const supplierEmails = querySnapshot.docs.map(doc => doc.data().email).filter(email => !!email);
+      const supplierEmails = querySnapshot.docs
+        .map(doc => doc.data().email as string | undefined)
+        .filter((email): email is string => !!email)
+        .flatMap(email => email.split(';').map(e => e.trim()).filter(Boolean));
 
       if (supplierEmails.length === 0) {
         await addNotification('Aviso', `Nenhum fornecedor encontrado para a família: ${rfq.family}`, 'warning');

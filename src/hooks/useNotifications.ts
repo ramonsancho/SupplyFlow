@@ -67,9 +67,7 @@ export function useNotifications() {
         read: false,
       });
     } catch (error) {
-      if (auth.currentUser) {
-        handleFirestoreError(error, OperationType.CREATE, 'notifications');
-      }
+      console.error('Error adding notification:', error);
     }
   }, []);
 

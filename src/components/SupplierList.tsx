@@ -214,7 +214,8 @@ export default function SupplierList() {
 
   const filteredSuppliers = suppliers.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.document.includes(searchTerm);
+      s.document.includes(searchTerm) ||
+      (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesFamily = selectedFamily === 'Todas as Famílias' || s.families.includes(selectedFamily);
     const matchesCritical = filterCritical === null || s.isCritical === filterCritical;
     return matchesSearch && matchesFamily && matchesCritical;
@@ -467,7 +468,7 @@ export default function SupplierList() {
                     <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-brand-500 transition-colors">
                       <Mail size={16} />
                     </div>
-                    <span className="truncate">{supplier.email}</span>
+                    <span className="truncate" title={supplier.email}>{supplier.email.replace(/;\s*/g, '; ')}</span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
                     <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-brand-500 transition-colors">

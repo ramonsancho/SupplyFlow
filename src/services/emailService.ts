@@ -14,8 +14,12 @@ export interface EmailPayload {
  */
 export const emailService = {
   sendCustomEmail: async (payload: EmailPayload) => {
+    const normalizedTo = Array.isArray(payload.to)
+      ? payload.to.flatMap(item => item.split(';').map(e => e.trim()).filter(Boolean))
+      : payload.to.split(';').map(e => e.trim()).filter(Boolean);
+
     console.log('[EmailService] Enviando e-mail:', { 
-      to: payload.to, 
+      to: normalizedTo, 
       subject: payload.subject,
       fromName: payload.fromName 
     });
@@ -28,6 +32,7 @@ export const emailService = {
       },
       body: JSON.stringify({
         ...payload,
+        to: normalizedTo,
         replyTo: auth.currentUser?.email,
       }),
     });

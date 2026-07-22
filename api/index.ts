@@ -176,9 +176,16 @@ apiRouter.get("/health", (req, res) => {
 
 apiRouter.post("/send-email", authenticate, async (req, res) => {
   const { to, subject, html, text, replyTo, fromName } = req.body;
-  console.log(`[Email] Tentativa de envio para: ${to}`);
+  console.log(`[Email] Tentativa de envio para: ${JSON.stringify(to)}`);
 
-  if (!to || (Array.isArray(to) && to.length === 0)) {
+  let recipients: string[] = [];
+  if (Array.isArray(to)) {
+    recipients = to.flatMap(item => typeof item === 'string' ? item.split(';').map(e => e.trim()).filter(Boolean) : []);
+  } else if (typeof to === 'string') {
+    recipients = to.split(';').map(e => e.trim()).filter(Boolean);
+  }
+
+  if (recipients.length === 0) {
     return res.status(400).json({ error: "Nenhum destinatário informado." });
   }
 
@@ -204,11 +211,11 @@ apiRouter.post("/send-email", authenticate, async (req, res) => {
   try {
     const from = `"${fromName || 'SupplyFlow'}" <${process.env.SMTP_FROM || user}>`;
     
-    if (Array.isArray(to)) {
-      console.log(`[Email] Enviando ${to.length} e-mails individuais para: ${to.join(', ')}`);
+    if (recipients.length > 1) {
+      console.log(`[Email] Enviando ${recipients.length} e-mails individuais para: ${recipients.join(', ')}`);
       
       const results = [];
-      for (const recipient of to) {
+      for (const recipient of recipients) {
         try {
           const info = await transporter.sendMail({
             from,
@@ -227,9 +234,9 @@ apiRouter.post("/send-email", authenticate, async (req, res) => {
       }
       
       const successCount = results.filter(r => r.success).length;
-      console.log(`[Email] Concluído. Sucesso: ${successCount}/${to.length}`);
+      console.log(`[Email] Concluído. Sucesso: ${successCount}/${recipients.length}`);
       
-      if (successCount === 0 && to.length > 0) {
+      if (successCount === 0 && recipients.length > 0) {
         let finalError = "Falha ao enviar todos os e-mails.";
         
         // Check if it's the Gmail App Password or invalid credentials error
@@ -251,15 +258,16 @@ apiRouter.post("/send-email", authenticate, async (req, res) => {
       return res.json({ success: true, details: results });
     } else {
       // Envio único para um único destinatário
+      const targetEmail = recipients[0];
       const info = await transporter.sendMail({
         from,
-        to,
+        to: targetEmail,
         subject,
         html,
         text: text || "Solicitação de Aprovação SupplyFlow. Por favor, acesse o sistema para mais detalhes.",
         replyTo,
       });
-      console.log(`[Email] Sucesso! E-mail enviado para: ${to} (MessageID: ${info.messageId})`);
+      console.log(`[Email] Sucesso! E-mail enviado para: ${targetEmail} (MessageID: ${info.messageId})`);
     }
     
     res.json({ success: true });

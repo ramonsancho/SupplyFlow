@@ -15,10 +15,19 @@ function cn(...inputs: ClassValue[]) {
 
 const DEFAULT_FAMILIES = ['Serviços de TI', 'Limpeza', 'Logística de Material'];
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const supplierSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
   document: z.string().min(11, 'Documento inválido'),
-  email: z.string().email('Email inválido'),
+  email: z.string().min(1, 'Email obrigatório').refine(
+    (val) => {
+      const emails = val.split(';').map(e => e.trim()).filter(Boolean);
+      if (emails.length === 0) return false;
+      return emails.every(e => emailRegex.test(e));
+    },
+    { message: 'Um ou mais e-mails informados são inválidos (separe múltiplos e-mails por ";")' }
+  ),
   phone: z.string().min(10, 'Telefone inválido'),
   address: z.string().min(5, 'Endereço obrigatório'),
   contactName: z.string().min(3, 'Nome do contato obrigatório'),
@@ -216,13 +225,16 @@ export default function SupplierModal({ isOpen, onClose, onSubmit, initialData, 
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Email de Contato</label>
+              <label className="text-xs font-bold text-[#141414] uppercase tracking-widest">Email(s) de Contato</label>
               <input 
                 {...register('email')}
                 disabled={readOnly}
                 className="w-full px-4 py-3 bg-[#F5F5F5] border-none rounded-xl focus:ring-2 focus:ring-[#141414] transition-all disabled:opacity-70"
-                placeholder="contato@empresa.com"
+                placeholder="contato1@empresa.com; contato2@empresa.com"
               />
+              <p className="text-[10px] text-[#8E9299] font-medium">
+                Separe múltiplos e-mails utilizando ponto e vírgula (;)
+              </p>
               {errors.email && <p className="text-xs text-red-500 font-medium">{errors.email.message}</p>}
             </div>
 

@@ -73,9 +73,7 @@ export function useAuditLog() {
         undone: false
       });
     } catch (error) {
-      if (auth.currentUser) {
-        handleFirestoreError(error, OperationType.CREATE, 'audit-logs');
-      }
+      console.error('Error writing to audit log:', error);
     }
   }, []);
 

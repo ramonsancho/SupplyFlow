@@ -151,11 +151,15 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
 
+    function isValidSupplierEmail(email) {
+      return email is string && email.matches("^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}[;\\s]*)+$");
+    }
+
     function isValidSupplier(data) {
       return hasRequiredFields(['name', 'document', 'email', 'families', 'createdAt']) &&
              isValidString(data.name, 1, 100) &&
              isValidString(data.document, 1, 20) &&
-             isValidEmail(data.email) &&
+             isValidSupplierEmail(data.email) &&
              data.families is list &&
              (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 10)) &&
              (!('accuracy' in data) || (data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100)) &&
